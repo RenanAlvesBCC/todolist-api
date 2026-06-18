@@ -55,10 +55,26 @@ Autentica e devolve um token JWT.
 ## Endpoints protegidos (exigem `Authorization: Bearer <token>`)
 
 ### GET /api/tasks
-Lista todas as tarefas do usuário autenticado.
+Lista as tarefas do usuário autenticado, com filtros e paginação opcionais via query string.
 
-**Resposta:**
-- `200 OK` — array de objetos `Task` (ver formato abaixo)
+**Query params (todos opcionais):**
+- `completed` — `true` ou `false`, filtra por status
+- `search` — filtra tarefas cujo título contenha o texto informado
+- `page` — número da página (padrão: 1)
+- `limit` — itens por página (padrão: 10, máximo: 100)
+
+**Exemplo:** `GET /api/tasks?completed=false&search=estudar&page=1&limit=10`
+
+**Resposta `200 OK`:**
+```json
+{
+  "tasks": [ /* array de objetos Task, ver formato abaixo */ ],
+  "page": 1,
+  "limit": 10,
+  "total": 4,
+  "total_pages": 1
+}
+```
 
 ### POST /api/tasks
 Cria uma nova tarefa para o usuário autenticado.
