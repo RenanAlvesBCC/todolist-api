@@ -6,19 +6,17 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/services"
+	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
 )
 
-// AuthHandler só traduz HTTP <-> service. Não sabe nada sobre hash, JWT ou banco.
 type AuthHandler struct {
 	authService *services.AuthService
 }
 
-// NewAuthHandler cria o handler recebendo o service que ele vai usar.
 func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
-// credentials é o formato esperado no corpo JSON de /register e /login.
 type credentials struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
@@ -27,12 +25,12 @@ type credentials struct {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input credentials
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
 		return
 	}
 
 	if err := h.authService.Register(input.Username, input.Password); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "usuário já existe"})
+		utils.RespondError(c, http.StatusConflict, "usuário já existe")
 		return
 	}
 
@@ -42,13 +40,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input credentials
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
 		return
 	}
 
 	token, err := h.authService.Login(input.Username, input.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 

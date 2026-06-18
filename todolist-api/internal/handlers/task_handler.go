@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/services"
+	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
 )
 
 type TaskHandler struct {
@@ -23,9 +24,6 @@ type taskInput struct {
 	Completed   bool   `json:"completed"`
 }
 
-// getUserID lê o user_id que o middleware guardou no contexto (fase 4).
-// Atenção: claims de JWT decodificam números como float64, não como uint —
-// por isso o type assertion é pra float64 antes de converter pra uint.
 func getUserID(c *gin.Context) uint {
 	userIDFloat := c.MustGet("user_id").(float64)
 	return uint(userIDFloat)
@@ -34,37 +32,53 @@ func getUserID(c *gin.Context) uint {
 func (h *TaskHandler) Create(c *gin.Context) {
 	var input taskInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
 		return
 	}
 
 	task, err := h.taskService.Create(getUserID(c), input.Title, input.Description)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	c.JSON(http.StatusCreated, task)
 }
 
+// List lê filtros e paginação da query string, por exemplo:
+// /api/tasks?completed=false&search=estudar&page=1&limit=10
 func (h *TaskHandler) List(c *gin.Context) {
-	tasks, err := h.taskService.List(getUserID(c))
+	var completed *bool
+	if value := c.Query("completed"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			utils.RespondError(c, http.StatusBadRequest, "completed deve ser 'true' ou 'false'")
+			return
+		}
+		completed = &parsed
+	}
+
+	search := c.Query("search")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	result, err := h.taskService.List(getUserID(c), completed, search, page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "erro ao buscar tarefas"})
+		utils.RespondError(c, http.StatusInternalServerError, "erro ao buscar tarefas")
 		return
 	}
-	c.JSON(http.StatusOK, tasks)
+	c.JSON(http.StatusOK, result)
 }
 
 func (h *TaskHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
 		return
 	}
 
 	task, err := h.taskService.Get(uint(id), getUserID(c))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, task)
@@ -73,19 +87,19 @@ func (h *TaskHandler) Get(c *gin.Context) {
 func (h *TaskHandler) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
 		return
 	}
 
 	var input taskInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
 		return
 	}
 
 	task, err := h.taskService.Update(uint(id), getUserID(c), input.Title, input.Description, input.Completed)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, task)
@@ -94,12 +108,12 @@ func (h *TaskHandler) Update(c *gin.Context) {
 func (h *TaskHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
 		return
 	}
 
 	if err := h.taskService.Delete(uint(id), getUserID(c)); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
