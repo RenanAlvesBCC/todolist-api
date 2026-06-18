@@ -17,3 +17,10 @@ Content-Type: application/json
   "username": "renan",
   "password": "senha123"
 }
+
+### Perfil sem token (deve dar 401)
+GET http://localhost:8080/api/profile
+
+### Perfil com token (cole o token que veio do login)
+GET http://localhost:8080/api/profile
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE4MzIxMDIsImlhdCI6MTc4MTc0NTcwMiwidXNlcl9pZCI6MSwidXNlcm5hbWUiOiJyZW5hbiJ9.lS0ULfIYNxG9QAagpGjbD3O-n47MukpYflrRxYjQF4s

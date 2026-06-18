@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"os"
 	"time"
 
@@ -27,4 +28,21 @@ func GenerateToken(userID uint, username string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(getSecretKey())
+}
+
+// ValidateToken verifica a assinatura e a validade do token, retornando os dados (claims) contidos nele.
+func ValidateToken(tokenString string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		return getSecretKey(), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("token inválido")
+	}
+
+	return claims, nil
 }
