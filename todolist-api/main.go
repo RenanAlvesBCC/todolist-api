@@ -20,12 +20,15 @@ func main() {
 
 	database.Connect()
 
-	// Monta a cadeia: repository -> service -> handler
 	userRepo := repository.NewUserRepository(database.DB)
 	authService := services.NewAuthService(userRepo)
 	authHandler := handlers.NewAuthHandler(authService)
 
+	taskRepo := repository.NewTaskRepository(database.DB)
+	taskService := services.NewTaskService(taskRepo)
+	taskHandler := handlers.NewTaskHandler(taskService)
+
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler)
+	routes.SetupRoutes(router, authHandler, taskHandler)
 	router.Run(":8080")
 }

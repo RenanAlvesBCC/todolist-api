@@ -24,3 +24,36 @@ GET http://localhost:8080/api/profile
 ### Perfil com token (cole o token que veio do login)
 GET http://localhost:8080/api/profile
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE4MzIxMDIsImlhdCI6MTc4MTc0NTcwMiwidXNlcl9pZCI6MSwidXNlcm5hbWUiOiJyZW5hbiJ9.lS0ULfIYNxG9QAagpGjbD3O-n47MukpYflrRxYjQF4s
+
+### Criar tarefa
+POST http://localhost:8080/api/tasks
+Content-Type: application/json
+Authorization: Bearer COLE_O_TOKEN_AQUI
+
+{
+  "title": "Estudar Go",
+  "description": "Terminar a fase 5 do projeto"
+}
+
+### Listar tarefas
+GET http://localhost:8080/api/tasks
+Authorization: Bearer COLE_O_TOKEN_AQUI
+
+### Buscar uma tarefa específica (troque o 1 pelo id retornado na criação)
+GET http://localhost:8080/api/tasks/1
+Authorization: Bearer COLE_O_TOKEN_AQUI
+
+### Marcar como concluída
+PUT http://localhost:8080/api/tasks/1
+Content-Type: application/json
+Authorization: Bearer COLE_O_TOKEN_AQUI
+
+{
+  "title": "Estudar Go",
+  "description": "Terminar a fase 5 do projeto",
+  "completed": true
+}
+
+### Excluir tarefa
+DELETE http://localhost:8080/api/tasks/1
+Authorization: Bearer COLE_O_TOKEN_AQUI
