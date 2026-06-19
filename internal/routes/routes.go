@@ -7,7 +7,7 @@ import (
 	"github.com/RenanAlvesBCC/todolist-api/internal/middleware"
 )
 
-func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHandler) {
+func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler) {
 	router.GET("/", handlers.HomeHandler)
 
 	router.POST("/register", authHandler.Register)
@@ -16,10 +16,14 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, taskHand
 	protected := router.Group("/api")
 	protected.Use(middleware.AuthRequired())
 	{
-		protected.POST("/tasks", taskHandler.Create)
-		protected.GET("/tasks", taskHandler.List)
-		protected.GET("/tasks/:id", taskHandler.Get)
-		protected.PUT("/tasks/:id", taskHandler.Update)
-		protected.DELETE("/tasks/:id", taskHandler.Delete)
+		protected.GET("/lists", listHandler.List)
+		protected.POST("/lists", listHandler.Create)
+		protected.GET("/lists/:id", listHandler.Get)
+		protected.PUT("/lists/:id", listHandler.Update)
+		protected.DELETE("/lists/:id", listHandler.Delete)
+
+		protected.POST("/lists/:id/items", listHandler.AddItem)
+		protected.PUT("/lists/:id/items/:itemId", listHandler.UpdateItem)
+		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
 	}
 }

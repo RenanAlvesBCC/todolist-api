@@ -24,11 +24,12 @@ func main() {
 	authService := services.NewAuthService(userRepo)
 	authHandler := handlers.NewAuthHandler(authService)
 
-	taskRepo := repository.NewTaskRepository(database.DB)
-	taskService := services.NewTaskService(taskRepo)
-	taskHandler := handlers.NewTaskHandler(taskService)
+	listRepo := repository.NewTaskListRepository(database.DB)
+	itemRepo := repository.NewTaskItemRepository(database.DB)
+	listService := services.NewTaskListService(listRepo, itemRepo)
+	listHandler := handlers.NewTaskListHandler(listService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, taskHandler)
+	routes.SetupRoutes(router, authHandler, listHandler)
 	router.Run(":8080")
 }

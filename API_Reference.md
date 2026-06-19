@@ -54,76 +54,102 @@ Autentica e devolve um token JWT.
 
 ## Endpoints protegidos (exigem `Authorization: Bearer <token>`)
 
-### GET /api/tasks
-Lista as tarefas do usuário autenticado, com filtros e paginação opcionais via query string.
+Modelo de dados: cada **lista** (`TaskList`) é um bloco pertencente a um usuário, contendo vários **itens** (`TaskItem`) marcáveis dentro dela. Não existe mais o conceito de "tarefa solta" — toda tarefa marcável vive dentro de uma lista.
+
+### GET /api/lists
+Lista os blocos do usuário autenticado, já com os itens de cada um embutidos, com busca e paginação opcionais via query string.
 
 **Query params (todos opcionais):**
-- `completed` — `true` ou `false`, filtra por status
-- `search` — filtra tarefas cujo título contenha o texto informado
+- `search` — filtra listas cujo título contenha o texto informado
 - `page` — número da página (padrão: 1)
-- `limit` — itens por página (padrão: 10, máximo: 100)
+- `limit` — listas por página (padrão: 20, máximo: 100)
 
-**Exemplo:** `GET /api/tasks?completed=false&search=estudar&page=1&limit=10`
+**Exemplo:** `GET /api/lists?search=compras&page=1&limit=20`
 
 **Resposta `200 OK`:**
 ```json
 {
-  "tasks": [ /* array de objetos Task, ver formato abaixo */ ],
+  "lists": [ /* array de objetos TaskList, ver formato abaixo */ ],
   "page": 1,
-  "limit": 10,
+  "limit": 20,
   "total": 4,
   "total_pages": 1
 }
 ```
 
-### POST /api/tasks
-Cria uma nova tarefa para o usuário autenticado.
+### POST /api/lists
+Cria uma nova lista vazia (sem itens) para o usuário autenticado.
 
 **Body:**
 ```json
-{
-  "title": "string (obrigatório)",
-  "description": "string (opcional)"
-}
+{ "title": "string (obrigatório)" }
 ```
 
 **Respostas:**
-- `201 Created` — objeto `Task` criado
+- `201 Created` — objeto `TaskList` criado, com `items: []`
 - `400 Bad Request` — `{"error": "título é obrigatório"}` ou `{"error": "dados inválidos"}`
 
-### GET /api/tasks/:id
-Busca uma tarefa específica — só retorna se ela pertencer ao usuário autenticado.
+### GET /api/lists/:id
+Busca uma lista específica (com seus itens) — só retorna se pertencer ao usuário autenticado.
 
 **Respostas:**
-- `200 OK` — objeto `Task`
-- `404 Not Found` — `{"error": "tarefa não encontrada"}`
+- `200 OK` — objeto `TaskList`
+- `404 Not Found` — `{"error": "lista não encontrada"}`
 
-### PUT /api/tasks/:id
-Atualiza uma tarefa existente do usuário autenticado.
+### PUT /api/lists/:id
+Atualiza só o título de uma lista existente.
 
 **Body:**
 ```json
-{
-  "title": "string",
-  "description": "string",
-  "completed": true
-}
+{ "title": "string" }
 ```
 
 **Respostas:**
-- `200 OK` — objeto `Task` atualizado
-- `404 Not Found` — `{"error": "tarefa não encontrada"}`
+- `200 OK` — objeto `TaskList` atualizado
+- `404 Not Found` — `{"error": "lista não encontrada"}`
 
-### DELETE /api/tasks/:id
-Remove uma tarefa do usuário autenticado.
+### DELETE /api/lists/:id
+Remove uma lista e **todos os itens dentro dela**.
 
 **Respostas:**
 - `204 No Content` — sem corpo na resposta
-- `404 Not Found` — `{"error": "tarefa não encontrada"}`
+- `404 Not Found` — `{"error": "lista não encontrada"}`
+
+### POST /api/lists/:id/items
+Adiciona um novo item (não concluído) dentro de uma lista do usuário autenticado.
+
+**Body:**
+```json
+{ "text": "string (obrigatório)" }
+```
+
+**Respostas:**
+- `201 Created` — objeto `TaskItem` criado
+- `400 Bad Request` — `{"error": "texto do item é obrigatório"}`
+- `404 Not Found` — `{"error": "lista não encontrada"}`
+
+### PUT /api/lists/:id/items/:itemId
+Atualiza o texto e/ou o status de conclusão de um item.
+
+**Body:**
+```json
+{ "text": "string", "completed": true }
+```
+
+**Respostas:**
+- `200 OK` — objeto `TaskItem` atualizado
+- `404 Not Found` — `{"error": "lista não encontrada"}` ou `{"error": "item não encontrado"}`
+
+### DELETE /api/lists/:id/items/:itemId
+Remove um item específico de dentro de uma lista.
+
+**Respostas:**
+- `204 No Content` — sem corpo na resposta
+- `404 Not Found` — `{"error": "lista não encontrada"}` ou `{"error": "item não encontrado"}`
 
 ---
 
-## Formato do objeto Task
+## Formato do objeto TaskList
 
 ```json
 {
@@ -131,14 +157,23 @@ Remove uma tarefa do usuário autenticado.
   "CreatedAt": "2026-06-18T10:00:00Z",
   "UpdatedAt": "2026-06-18T10:00:00Z",
   "DeletedAt": null,
-  "title": "Estudar Go",
-  "description": "Terminar a fase 5 do projeto",
-  "completed": false,
-  "user_id": 1
+  "title": "Compras da semana",
+  "user_id": 1,
+  "items": [
+    {
+      "ID": 10,
+      "CreatedAt": "2026-06-18T10:05:00Z",
+      "UpdatedAt": "2026-06-18T10:05:00Z",
+      "DeletedAt": null,
+      "text": "Leite",
+      "completed": false,
+      "task_list_id": 1
+    }
+  ]
 }
 ```
 
-Nota: os campos `ID`, `CreatedAt`, `UpdatedAt` e `DeletedAt` vêm com a primeira letra maiúscula porque são herdados de `gorm.Model` e ainda não têm uma tag `json` customizada — diferente de `title`, `description`, `completed` e `user_id`, que usam tags em minúsculo definidas no model. Vale padronizar isso numa fase futura de refinamento.
+Nota: os campos `ID`, `CreatedAt`, `UpdatedAt` e `DeletedAt` (tanto na lista quanto em cada item) vêm com a primeira letra maiúscula por serem herdados de `gorm.Model`, sem tag `json` customizada — diferente de `title`/`text`/`completed`/`user_id`/`task_list_id`, que usam tags em minúsculo definidas explicitamente no model.
 
 ---
 
@@ -157,4 +192,5 @@ Esses erros vêm do middleware, antes mesmo do handler da rota ser executado:
 - Guardar o token recebido no login em local seguro (Keychain do iOS), nunca em `UserDefaults`.
 - Incluir o token no header `Authorization` em toda chamada às rotas `/api/*`.
 - Tratar respostas `401` redirecionando para a tela de login, já que o token expira em 24h e ainda não existe refresh automático.
-- O campo `completed` no `PUT /api/tasks/:id` precisa ser enviado mesmo que não tenha mudado — o endpoint substitui os três campos (`title`, `description`, `completed`) de uma vez, não faz atualização parcial.
+- O `PUT /api/lists/:id/items/:itemId` substitui `text` e `completed` de uma vez (não é atualização parcial) — ao marcar/desmarcar um item, sempre reenviar o `text` atual junto.
+- Não existe endpoint para reordenar listas ou itens ainda — a ordem vem fixa por data de criação (mais recente primeiro).
