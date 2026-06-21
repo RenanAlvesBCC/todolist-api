@@ -13,11 +13,18 @@ import (
 )
 
 type mockTaskListStore struct {
-	createFunc        func(list *models.TaskList) error
-	findAllByUserFunc func(userID uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error)
-	findByIDFunc      func(id, userID uint) (*models.TaskList, error)
-	updateFunc        func(list *models.TaskList) error
-	deleteFunc        func(list *models.TaskList) error
+	createFunc          func(list *models.TaskList) error
+	findAllByUserFunc   func(userID uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error)
+	findByIDFunc        func(id, userID uint) (*models.TaskList, error)
+	updateFunc          func(list *models.TaskList) error
+	deleteFunc          func(list *models.TaskList) error
+	nextPositionFunc    func(userID uint) (int, error)
+	updatePositionsFunc func(userID uint, orderedIDs []uint) error
+}
+
+func (m *mockTaskListStore) NextPosition(userID uint) (int, error) { return m.nextPositionFunc(userID) }
+func (m *mockTaskListStore) UpdatePositions(userID uint, orderedIDs []uint) error {
+	return m.updatePositionsFunc(userID, orderedIDs)
 }
 
 func (m *mockTaskListStore) Create(list *models.TaskList) error { return m.createFunc(list) }
@@ -36,8 +43,18 @@ type mockTaskItemStore struct {
 	updateFunc          func(item *models.TaskItem) error
 	deleteFunc          func(item *models.TaskItem) error
 	deleteAllByListFunc func(taskListID uint) error
+	nextPositionFunc    func(taskListID uint) (int, error)
+	updatePositionsFunc func(taskListID uint, orderedIDs []uint) error
 }
 
+// ... (métodos existentes continuam iguais)
+
+func (m *mockTaskItemStore) NextPosition(taskListID uint) (int, error) {
+	return m.nextPositionFunc(taskListID)
+}
+func (m *mockTaskItemStore) UpdatePositions(taskListID uint, orderedIDs []uint) error {
+	return m.updatePositionsFunc(taskListID, orderedIDs)
+}
 func (m *mockTaskItemStore) Create(item *models.TaskItem) error { return m.createFunc(item) }
 func (m *mockTaskItemStore) FindByIDAndList(id, taskListID uint) (*models.TaskItem, error) {
 	return m.findByIDAndListFunc(id, taskListID)
@@ -50,6 +67,7 @@ func (m *mockTaskItemStore) DeleteAllByList(taskListID uint) error {
 
 func TestTaskListService_CreateList_Success(t *testing.T) {
 	store := &mockTaskListStore{
+		nextPositionFunc: func(userID uint) (int, error) { return 0, nil },
 		createFunc: func(list *models.TaskList) error {
 			list.ID = 1
 			return nil
@@ -140,6 +158,43 @@ func TestTaskListService_UpdateItem_ListNotOwnedByUserReturnsError(t *testing.T)
 	service := NewTaskListService(store, &mockTaskItemStore{})
 
 	_, err := service.UpdateItem(1, 10, 999, "Tentando editar item de outro usuário", false)
+
+	assert.EqualError(t, err, "lista não encontrada")
+}
+
+func TestTaskListService_ReorderLists_Success(t *testing.T) {
+	var receivedIDs []uint
+	store := &mockTaskListStore{
+		updatePositionsFunc: func(userID uint, orderedIDs []uint) error {
+			receivedIDs = orderedIDs
+			return nil
+		},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{})
+
+	err := service.ReorderLists(1, []uint{3, 1, 2})
+
+	require.NoError(t, err)
+	assert.Equal(t, []uint{3, 1, 2}, receivedIDs)
+}
+
+func TestTaskListService_ReorderLists_EmptyIDsReturnsError(t *testing.T) {
+	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{})
+
+	err := service.ReorderLists(1, []uint{})
+
+	assert.EqualError(t, err, "lista de ids vazia")
+}
+
+func TestTaskListService_ReorderItems_ListNotOwnedReturnsError(t *testing.T) {
+	store := &mockTaskListStore{
+		findByIDFunc: func(id, userID uint) (*models.TaskList, error) {
+			return nil, errors.New("record not found")
+		},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{})
+
+	err := service.ReorderItems(1, 999, []uint{1, 2})
 
 	assert.EqualError(t, err, "lista não encontrada")
 }

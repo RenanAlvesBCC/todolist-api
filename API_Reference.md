@@ -149,6 +149,34 @@ Remove um item específico de dentro de uma lista.
 
 ---
 
+### PUT /api/lists/reorder
+Atualiza a ordem de exibição das listas do usuário autenticado.
+
+**Body:**
+```json
+{ "ids": [3, 1, 2] }
+```
+O array deve conter os IDs de todas as listas que o usuário quer reordenar, na nova ordem desejada. A primeira posição (índice 0) vira a `position` 0, e assim por diante.
+
+**Respostas:**
+- `204 No Content` — sem corpo na resposta
+- `400 Bad Request` — `{"error": "lista de ids vazia"}` ou `{"error": "dados inválidos"}`
+
+### PUT /api/lists/:id/items/reorder
+Atualiza a ordem dos itens dentro de uma lista específica.
+
+**Body:**
+```json
+{ "ids": [11, 10] }
+```
+
+**Respostas:**
+- `204 No Content` — sem corpo na resposta
+- `400 Bad Request` — `{"error": "lista de ids vazia"}`
+- `404 Not Found` — `{"error": "lista não encontrada"}`
+
+---
+
 ## Formato do objeto TaskList
 
 ```json
@@ -193,4 +221,4 @@ Esses erros vêm do middleware, antes mesmo do handler da rota ser executado:
 - Incluir o token no header `Authorization` em toda chamada às rotas `/api/*`.
 - Tratar respostas `401` redirecionando para a tela de login, já que o token expira em 24h e ainda não existe refresh automático.
 - O `PUT /api/lists/:id/items/:itemId` substitui `text` e `completed` de uma vez (não é atualização parcial) — ao marcar/desmarcar um item, sempre reenviar o `text` atual junto.
-- Não existe endpoint para reordenar listas ou itens ainda — a ordem vem fixa por data de criação (mais recente primeiro).
+- Listas e itens são ordenados pelo campo `position` (ordem definida pelo usuário, manipulável via os endpoints de reorder), não mais por data de criação.

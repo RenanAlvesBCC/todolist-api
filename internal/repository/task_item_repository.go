@@ -37,3 +37,25 @@ func (r *TaskItemRepository) Delete(item *models.TaskItem) error {
 func (r *TaskItemRepository) DeleteAllByList(taskListID uint) error {
 	return r.db.Where("task_list_id = ?", taskListID).Delete(&models.TaskItem{}).Error
 }
+
+func (r *TaskItemRepository) NextPosition(taskListID uint) (int, error) {
+	var count int64
+	if err := r.db.Model(&models.TaskItem{}).Where("task_list_id = ?", taskListID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+func (r *TaskItemRepository) UpdatePositions(taskListID uint, orderedIDs []uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for index, id := range orderedIDs {
+			result := tx.Model(&models.TaskItem{}).
+				Where("id = ? AND task_list_id = ?", id, taskListID).
+				Update("position", index)
+			if result.Error != nil {
+				return result.Error
+			}
+		}
+		return nil
+	})
+}

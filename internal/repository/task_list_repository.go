@@ -42,8 +42,8 @@ func (r *TaskListRepository) FindAllByUser(userID uint, filter TaskListFilter) (
 
 	offset := (filter.Page - 1) * filter.Limit
 	if err := r.applyFilters(userID, filter).
-		Preload("Items").
-		Order("created_at desc").
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Order("position asc").
 		Offset(offset).Limit(filter.Limit).
 		Find(&lists).Error; err != nil {
 		return nil, 0, err
@@ -54,7 +54,10 @@ func (r *TaskListRepository) FindAllByUser(userID uint, filter TaskListFilter) (
 
 func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList, error) {
 	var list models.TaskList
-	if err := r.db.Preload("Items").Where("id = ? AND user_id = ?", id, userID).First(&list).Error; err != nil {
+	if err := r.db.
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&list).Error; err != nil {
 		return nil, err
 	}
 	return &list, nil
@@ -66,4 +69,26 @@ func (r *TaskListRepository) Update(list *models.TaskList) error {
 
 func (r *TaskListRepository) Delete(list *models.TaskList) error {
 	return r.db.Delete(list).Error
+}
+
+func (r *TaskListRepository) NextPosition(userID uint) (int, error) {
+	var count int64
+	if err := r.db.Model(&models.TaskList{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+func (r *TaskListRepository) UpdatePositions(userID uint, orderedIDs []uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for index, id := range orderedIDs {
+			result := tx.Model(&models.TaskList{}).
+				Where("id = ? AND user_id = ?", id, userID).
+				Update("position", index)
+			if result.Error != nil {
+				return result.Error
+			}
+		}
+		return nil
+	})
 }

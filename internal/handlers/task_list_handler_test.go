@@ -25,6 +25,8 @@ type mockTaskListProvider struct {
 	addItemFunc    func(listID, userID uint, text string) (*models.TaskItem, error)
 	updateItemFunc func(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
 	deleteItemFunc func(listID, itemID, userID uint) error
+	reorderLists   func(userID uint, orderedIDs []uint) error
+	reorderItems   func(listID, userID uint, orderedIDs []uint) error
 }
 
 func (m *mockTaskListProvider) CreateList(userID uint, title string) (*models.TaskList, error) {
@@ -50,6 +52,13 @@ func (m *mockTaskListProvider) UpdateItem(listID, itemID, userID uint, text stri
 }
 func (m *mockTaskListProvider) DeleteItem(listID, itemID, userID uint) error {
 	return m.deleteItemFunc(listID, itemID, userID)
+}
+
+func (m *mockTaskListProvider) ReorderLists(userID uint, orderedIDs []uint) error {
+	return m.reorderListsFunc(userID, orderedIDs)
+}
+func (m *mockTaskListProvider) ReorderItems(listID, userID uint, orderedIDs []uint) error {
+	return m.reorderItemsFunc(listID, userID, orderedIDs)
 }
 
 // withUserContext simula o que o middleware de autenticação faria: injeta
@@ -171,4 +180,25 @@ func TestTaskListHandler_AddItem_Success(t *testing.T) {
 	var response models.TaskItem
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Leite", response.Text)
+}
+
+func TestTaskListHandler_ReorderLists_Success(t *testing.T) {
+	var receivedIDs []uint
+	provider := &mockTaskListProvider{
+		reorderListsFunc: func(userID uint, orderedIDs []uint) error {
+			receivedIDs = orderedIDs
+			return nil
+		},
+	}
+	router := setupRouter(provider)
+
+	body, _ := json.Marshal(map[string][]uint{"ids": {3, 1, 2}})
+	req := httptest.NewRequest(http.MethodPut, "/api/lists/reorder", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Equal(t, []uint{3, 1, 2}, receivedIDs)
 }

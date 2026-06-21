@@ -16,15 +16,18 @@ type TaskListStore interface {
 	FindByIDAndUser(id, userID uint) (*models.TaskList, error)
 	Update(list *models.TaskList) error
 	Delete(list *models.TaskList) error
+	NextPosition(userID uint) (int, error)
+	UpdatePositions(userID uint, orderedIDs []uint) error
 }
 
-// TaskItemStore descreve o que o TaskListService precisa do repository de itens.
 type TaskItemStore interface {
 	Create(item *models.TaskItem) error
 	FindByIDAndList(id, taskListID uint) (*models.TaskItem, error)
 	Update(item *models.TaskItem) error
 	Delete(item *models.TaskItem) error
 	DeleteAllByList(taskListID uint) error
+	NextPosition(taskListID uint) (int, error)
+	UpdatePositions(taskListID uint, orderedIDs []uint) error
 }
 
 type TaskListService struct {
@@ -41,7 +44,12 @@ func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskLis
 		return nil, errors.New("título é obrigatório")
 	}
 
-	list := &models.TaskList{Title: title, UserID: userID, Items: []models.TaskItem{}}
+	position, err := s.listRepo.NextPosition(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	list := &models.TaskList{Title: title, UserID: userID, Position: position, Items: []models.TaskItem{}}
 	if err := s.listRepo.Create(list); err != nil {
 		return nil, err
 	}
@@ -128,7 +136,12 @@ func (s *TaskListService) AddItem(listID, userID uint, text string) (*models.Tas
 		return nil, errors.New("lista não encontrada")
 	}
 
-	item := &models.TaskItem{Text: text, TaskListID: list.ID}
+	position, err := s.itemRepo.NextPosition(list.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	item := &models.TaskItem{Text: text, TaskListID: list.ID, Position: position}
 	if err := s.itemRepo.Create(item); err != nil {
 		return nil, err
 	}
@@ -170,4 +183,22 @@ func (s *TaskListService) DeleteItem(listID, itemID, userID uint) error {
 	}
 
 	return s.itemRepo.Delete(item)
+}
+
+func (s *TaskListService) ReorderLists(userID uint, orderedIDs []uint) error {
+	if len(orderedIDs) == 0 {
+		return errors.New("lista de ids vazia")
+	}
+	return s.listRepo.UpdatePositions(userID, orderedIDs)
+}
+
+func (s *TaskListService) ReorderItems(listID, userID uint, orderedIDs []uint) error {
+	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	if err != nil {
+		return errors.New("lista não encontrada")
+	}
+	if len(orderedIDs) == 0 {
+		return errors.New("lista de ids vazia")
+	}
+	return s.itemRepo.UpdatePositions(list.ID, orderedIDs)
 }

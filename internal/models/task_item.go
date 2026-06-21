@@ -8,5 +8,6 @@ type TaskItem struct {
 	gorm.Model
 	Text       string `gorm:"not null" json:"text"`
 	Completed  bool   `gorm:"default:false" json:"completed"`
+	Position   int    `gorm:"not null;default:0" json:"position"`
 	TaskListID uint   `gorm:"not null" json:"task_list_id"`
 }

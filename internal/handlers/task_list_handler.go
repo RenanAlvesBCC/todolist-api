@@ -21,6 +21,8 @@ type TaskListProvider interface {
 	AddItem(listID, userID uint, text string) (*models.TaskItem, error)
 	UpdateItem(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
 	DeleteItem(listID, itemID, userID uint) error
+	ReorderLists(userID uint, orderedIDs []uint) error
+	ReorderItems(listID, userID uint, orderedIDs []uint) error
 }
 
 type TaskListHandler struct {
@@ -191,4 +193,42 @@ func (h *TaskListHandler) DeleteItem(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
+}
+
+type reorderInput struct {
+	IDs []uint `json:"ids" binding:"required"`
+}
+
+func (h *TaskListHandler) ReorderLists(c *gin.Context) {
+	var input reorderInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
+		return
+	}
+
+	if err := h.listService.ReorderLists(getUserID(c), input.IDs); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *TaskListHandler) ReorderItems(c *gin.Context) {
+	listID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
+		return
+	}
+
+	var input reorderInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
+		return
+	}
+
+	if err := h.listService.ReorderItems(uint(listID), getUserID(c), input.IDs); err != nil {
+		utils.RespondError(c, http.StatusNotFound, err.Error())
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

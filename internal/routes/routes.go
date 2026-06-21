@@ -25,5 +25,7 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 		protected.POST("/lists/:id/items", listHandler.AddItem)
 		protected.PUT("/lists/:id/items/:itemId", listHandler.UpdateItem)
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
+		protected.PUT("/lists/reorder", listHandler.ReorderLists)
+		protected.PUT("/lists/:id/items/reorder", listHandler.ReorderItems)
 	}
 }
