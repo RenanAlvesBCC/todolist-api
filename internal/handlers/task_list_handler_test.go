@@ -17,16 +17,18 @@ import (
 )
 
 type mockTaskListProvider struct {
-	createListFunc func(userID uint, title string) (*models.TaskList, error)
-	listAllFunc    func(userID uint, search string, page, limit int) (*services.PaginatedTaskLists, error)
-	getListFunc    func(listID, userID uint) (*models.TaskList, error)
-	updateListFunc func(listID, userID uint, title string) (*models.TaskList, error)
-	deleteListFunc func(listID, userID uint) error
-	addItemFunc    func(listID, userID uint, text string) (*models.TaskItem, error)
-	updateItemFunc func(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
-	deleteItemFunc func(listID, itemID, userID uint) error
-	reorderLists   func(userID uint, orderedIDs []uint) error
-	reorderItems   func(listID, userID uint, orderedIDs []uint) error
+	createListFunc   func(userID uint, title string) (*models.TaskList, error)
+	listAllFunc      func(userID uint, search string, page, limit int) (*services.PaginatedTaskLists, error)
+	getListFunc      func(listID, userID uint) (*models.TaskList, error)
+	updateListFunc   func(listID, userID uint, title string) (*models.TaskList, error)
+	deleteListFunc   func(listID, userID uint) error
+	addItemFunc      func(listID, userID uint, text string) (*models.TaskItem, error)
+	updateItemFunc   func(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
+	deleteItemFunc   func(listID, itemID, userID uint) error
+	reorderLists     func(userID uint, orderedIDs []uint) error
+	reorderItems     func(listID, userID uint, orderedIDs []uint) error
+	reorderListsFunc func(userID uint, orderedIDs []uint) error
+	reorderItemsFunc func(listID, userID uint, orderedIDs []uint) error
 }
 
 func (m *mockTaskListProvider) CreateList(userID uint, title string) (*models.TaskList, error) {
@@ -80,12 +82,15 @@ func setupRouter(provider *mockTaskListProvider) *gin.Engine {
 	{
 		group.POST("/lists", handler.Create)
 		group.GET("/lists", handler.List)
+		group.PUT("/lists/reorder", handler.ReorderLists)
 		group.GET("/lists/:id", handler.Get)
 		group.PUT("/lists/:id", handler.Update)
 		group.DELETE("/lists/:id", handler.Delete)
 		group.POST("/lists/:id/items", handler.AddItem)
+		group.PUT("/lists/:id/items/reorder", handler.ReorderItems)
 		group.PUT("/lists/:id/items/:itemId", handler.UpdateItem)
 		group.DELETE("/lists/:id/items/:itemId", handler.DeleteItem)
+
 	}
 	return router
 }

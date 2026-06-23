@@ -2,27 +2,38 @@ package database
 
 import (
 	"log"
+	"os"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/models"
 )
 
-// DB é a conexão global com o banco, usada pelos repositories.
 var DB *gorm.DB
 
-// Connect abre a conexão com o SQLite e roda as migrations.
 func Connect() {
-	db, err := gorm.Open(sqlite.Open("app.db"), &gorm.Config{})
+	db, err := openDB()
 	if err != nil {
 		log.Fatal("Falha ao conectar ao banco de dados: ", err)
 	}
 
-	if err := db.AutoMigrate(&models.User{}, &models.TaskList{}, &models.TaskItem{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.TaskList{},
+		&models.TaskItem{},
+	); err != nil {
 		log.Fatal("Falha ao migrar o banco de dados: ", err)
 	}
 
 	DB = db
 	log.Println("Banco de dados conectado e migrado com sucesso")
+}
+
+func openDB() (*gorm.DB, error) {
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	}
+	return gorm.Open(sqlite.Open("app.db"), &gorm.Config{})
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -202,11 +203,13 @@ type reorderInput struct {
 func (h *TaskListHandler) ReorderLists(c *gin.Context) {
 	var input reorderInput
 	if err := c.ShouldBindJSON(&input); err != nil {
+		log.Printf("ReorderLists bind error: %v", err)
 		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
 		return
 	}
 
 	if err := h.listService.ReorderLists(getUserID(c), input.IDs); err != nil {
+		log.Printf("ReorderLists bind error: %v", err)
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}

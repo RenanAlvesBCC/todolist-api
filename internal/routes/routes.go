@@ -18,14 +18,13 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 	{
 		protected.GET("/lists", listHandler.List)
 		protected.POST("/lists", listHandler.Create)
+		protected.PUT("/lists/reorder", listHandler.ReorderLists)
 		protected.GET("/lists/:id", listHandler.Get)
 		protected.PUT("/lists/:id", listHandler.Update)
 		protected.DELETE("/lists/:id", listHandler.Delete)
-
 		protected.POST("/lists/:id/items", listHandler.AddItem)
+		protected.PUT("/lists/:id/items/reorder", listHandler.ReorderItems)
 		protected.PUT("/lists/:id/items/:itemId", listHandler.UpdateItem)
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
-		protected.PUT("/lists/reorder", listHandler.ReorderLists)
-		protected.PUT("/lists/:id/items/reorder", listHandler.ReorderItems)
 	}
 }

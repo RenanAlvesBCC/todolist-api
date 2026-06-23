@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -31,5 +32,13 @@ func main() {
 
 	router := gin.Default()
 	routes.SetupRoutes(router, authHandler, listHandler)
-	router.Run(":8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Servidor rodando na porta %s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatal("Erro ao iniciar servidor: ", err)
+	}
 }
