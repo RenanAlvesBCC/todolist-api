@@ -23,6 +23,8 @@ func Connect() {
 		&models.User{},
 		&models.TaskList{},
 		&models.TaskItem{},
+		&models.TokenBlacklist{},
+		&models.AuditLog{},
 	); err != nil {
 		log.Fatal("Falha ao migrar o banco de dados: ", err)
 	}

@@ -5,17 +5,31 @@ import (
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/handlers"
 	"github.com/RenanAlvesBCC/todolist-api/internal/middleware"
+	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
 )
 
-func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler) {
+func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler, secRepo *repository.SecurityRepository) {
+	// Headers de segurança em todas as rotas
+	router.Use(middleware.SecurityHeaders())
+
+	// Rate limiting global — 60 req/min por IP
+	router.Use(middleware.RateLimitGlobal())
+
 	router.GET("/", handlers.HomeHandler)
 
-	router.POST("/register", authHandler.Register)
-	router.POST("/login", authHandler.Login)
+	// Rate limiting mais restritivo nas rotas de autenticação
+	auth := router.Group("/")
+	auth.Use(middleware.RateLimitAuth())
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+	}
 
 	protected := router.Group("/api")
 	protected.Use(middleware.AuthRequired())
+	protected.Use(middleware.BlacklistCheck(secRepo))
 	{
+		protected.POST("/logout", authHandler.Logout)
 		protected.GET("/lists", listHandler.List)
 		protected.POST("/lists", listHandler.Create)
 		protected.PUT("/lists/reorder", listHandler.ReorderLists)

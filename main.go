@@ -12,26 +12,36 @@ import (
 	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
 	"github.com/RenanAlvesBCC/todolist-api/internal/routes"
 	"github.com/RenanAlvesBCC/todolist-api/internal/services"
+	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("Aviso: arquivo .env não encontrado, usando variáveis do sistema")
+		log.Println("Aviso: arquivo .env não encontrado")
 	}
 
 	database.Connect()
 
+	// Repositories
 	userRepo := repository.NewUserRepository(database.DB)
-	authService := services.NewAuthService(userRepo)
-	authHandler := handlers.NewAuthHandler(authService)
-
 	listRepo := repository.NewTaskListRepository(database.DB)
 	itemRepo := repository.NewTaskItemRepository(database.DB)
+	secRepo := repository.NewSecurityRepository(database.DB)
+
+	// Limpeza periódica de tokens expirados em background
+	utils.StartTokenCleanup(secRepo)
+
+	// Services
+	authService := services.NewAuthService(userRepo)
 	listService := services.NewTaskListService(listRepo, itemRepo)
+
+	// Handlers
+	authHandler := handlers.NewAuthHandler(authService, secRepo)
 	listHandler := handlers.NewTaskListHandler(listService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, listHandler)
+	routes.SetupRoutes(router, authHandler, listHandler, secRepo)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

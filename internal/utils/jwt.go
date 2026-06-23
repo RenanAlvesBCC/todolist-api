@@ -46,3 +46,19 @@ func ValidateToken(tokenString string) (jwt.MapClaims, error) {
 
 	return claims, nil
 }
+
+// TokenExpiration extrai a data de expiração de um token válido.
+// Usada na hora de fazer logout pra saber até quando guardar na blacklist.
+func TokenExpiration(tokenString string) (time.Time, error) {
+	claims, err := ValidateToken(tokenString)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return time.Time{}, errors.New("campo exp ausente no token")
+	}
+
+	return time.Unix(int64(exp), 0), nil
+}

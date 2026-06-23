@@ -1,21 +1,23 @@
 GET http://localhost:8080/
 
 ### Registrar usuário
-POST http://localhost:8080/register
+# POST http://localhost:8080/register
+POST https://todolist-api-tq9d.onrender.com/register
 Content-Type: application/json
 
 {
-  "username": "renan",
-  "password": "senha123"
+  "username": "renanAlves",
+  "password": "abcd@1234"
 }
 
 ### Login
-POST http://localhost:8080/login
+# POST http://localhost:8080/login
+POST https://todolist-api-tq9d.onrender.com/login
 Content-Type: application/json
 
 {
-  "username": "renan",
-  "password": "senha123"
+  "username": "RenanAlves",
+  "password": "abcd@1234"
 }
 
 ### Perfil sem token (deve dar 401)
