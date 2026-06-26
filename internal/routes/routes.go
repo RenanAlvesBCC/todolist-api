@@ -8,7 +8,15 @@ import (
 	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
 )
 
-func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler, workspaceHandler *handlers.WorkspaceHandler, secRepo *repository.SecurityRepository) {
+func SetupRoutes(
+	router *gin.Engine,
+	authHandler *handlers.AuthHandler,
+	listHandler *handlers.TaskListHandler,
+	workspaceHandler *handlers.WorkspaceHandler,
+	quoteHandler *handlers.QuoteHandler,
+	flagHandler *handlers.PendingFlagHandler,
+	secRepo *repository.SecurityRepository,
+) {
 	router.Use(middleware.SecurityHeaders())
 	router.Use(middleware.RateLimitGlobal())
 	router.GET("/", handlers.HomeHandler)
@@ -39,7 +47,7 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 		protected.GET("/workspace/members", workspaceHandler.ListMembers)
 		protected.DELETE("/workspace/members/:userId", workspaceHandler.RemoveMember)
 
-		// Listas e itens (existentes)
+		// Listas e itens
 		protected.GET("/lists", listHandler.List)
 		protected.POST("/lists", listHandler.Create)
 		protected.PUT("/lists/reorder", listHandler.ReorderLists)
@@ -52,5 +60,15 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
 		protected.PUT("/lists/:id/status", listHandler.ChangeStatus)
 		protected.PUT("/lists/:id/assign", listHandler.AssignMember)
+
+		// Orçamentos (Fase C)
+		protected.POST("/lists/:id/quotes", quoteHandler.Add)
+		protected.GET("/lists/:id/quotes", quoteHandler.List)
+		protected.DELETE("/lists/:id/quotes/:quoteId", quoteHandler.Delete)
+
+		// Pendências (Fase C)
+		protected.POST("/lists/:id/flags", flagHandler.Add)
+		protected.PATCH("/lists/:id/flags/:flagId/resolve", flagHandler.Resolve)
+		protected.GET("/lists/:id/flags", flagHandler.List)
 	}
 }
