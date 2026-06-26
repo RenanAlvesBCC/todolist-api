@@ -21,6 +21,9 @@ func Connect() {
 
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.Workspace{},
+		&models.WorkspaceMember{},
+		&models.WorkspaceInvite{},
 		&models.TaskList{},
 		&models.TaskItem{},
 		&models.TokenBlacklist{},

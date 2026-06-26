@@ -42,7 +42,7 @@ func TestTaskListRepository_FindAllByUser_FiltersAndPaginates(t *testing.T) {
 	require.NoError(t, repo.Create(&models.TaskList{Title: "Compras do mês", UserID: 1}))
 	require.NoError(t, repo.Create(&models.TaskList{Title: "Lista de outro usuário", UserID: 2}))
 
-	lists, total, err := repo.FindAllByUser(1, TaskListFilter{Search: "compras", Page: 1, Limit: 10})
+	lists, total, err := repo.FindAll(1, nil, TaskListFilter{Search: "compras", Page: 1, Limit: 10})
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, lists, 2)
@@ -57,7 +57,7 @@ func TestTaskListRepository_FindAllByUser_PreloadsItems(t *testing.T) {
 	require.NoError(t, listRepo.Create(list))
 	require.NoError(t, itemRepo.Create(&models.TaskItem{Text: "Leite", TaskListID: list.ID}))
 
-	lists, _, err := listRepo.FindAllByUser(1, TaskListFilter{Page: 1, Limit: 10})
+	lists, _, err := listRepo.FindAll(1, nil, TaskListFilter{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, lists, 1)
 	assert.Len(t, lists[0].Items, 1)
@@ -98,7 +98,7 @@ func TestTaskListRepository_UpdatePositions_ReordersOnlyOwnedLists(t *testing.T)
 
 	require.NoError(t, repo.UpdatePositions(1, []uint{b.ID, a.ID}))
 
-	lists, _, err := repo.FindAllByUser(1, TaskListFilter{Page: 1, Limit: 10})
+	lists, _, err := repo.FindAll(1, nil, TaskListFilter{Page: 1, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, lists, 2)
 	assert.Equal(t, "B", lists[0].Title)

@@ -24,7 +24,16 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 
-	err = db.AutoMigrate(&models.User{}, &models.TaskList{}, &models.TaskItem{})
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Workspace{},
+		&models.WorkspaceMember{},
+		&models.WorkspaceInvite{},
+		&models.TaskList{},
+		&models.TaskItem{},
+		&models.TokenBlacklist{},
+		&models.AuditLog{},
+	)
 	require.NoError(t, err)
 
 	return db

@@ -8,16 +8,11 @@ import (
 	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
 )
 
-func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler, secRepo *repository.SecurityRepository) {
-	// Headers de segurança em todas as rotas
+func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHandler *handlers.TaskListHandler, workspaceHandler *handlers.WorkspaceHandler, secRepo *repository.SecurityRepository) {
 	router.Use(middleware.SecurityHeaders())
-
-	// Rate limiting global — 60 req/min por IP
 	router.Use(middleware.RateLimitGlobal())
-
 	router.GET("/", handlers.HomeHandler)
 
-	// Rate limiting mais restritivo nas rotas de autenticação
 	auth := router.Group("/")
 	auth.Use(middleware.RateLimitAuth())
 	{
@@ -25,11 +20,26 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 		auth.POST("/login", authHandler.Login)
 	}
 
+	// Convite pode ser previsualizando sem autenticação
+	router.GET("/invites/:code/preview", workspaceHandler.InvitePreview)
+
 	protected := router.Group("/api")
 	protected.Use(middleware.AuthRequired())
 	protected.Use(middleware.BlacklistCheck(secRepo))
 	{
 		protected.POST("/logout", authHandler.Logout)
+
+		// Workspace
+		protected.POST("/workspace", workspaceHandler.Create)
+		protected.GET("/workspace", workspaceHandler.Get)
+		protected.PUT("/workspace", workspaceHandler.Update)
+		protected.POST("/workspace/invites", workspaceHandler.GenerateInvite)
+		protected.GET("/workspace/invites", workspaceHandler.ListInvites)
+		protected.POST("/invites/:code/accept", workspaceHandler.AcceptInvite)
+		protected.GET("/workspace/members", workspaceHandler.ListMembers)
+		protected.DELETE("/workspace/members/:userId", workspaceHandler.RemoveMember)
+
+		// Listas e itens (existentes)
 		protected.GET("/lists", listHandler.List)
 		protected.POST("/lists", listHandler.Create)
 		protected.PUT("/lists/reorder", listHandler.ReorderLists)
@@ -40,5 +50,7 @@ func SetupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, listHand
 		protected.PUT("/lists/:id/items/reorder", listHandler.ReorderItems)
 		protected.PUT("/lists/:id/items/:itemId", listHandler.UpdateItem)
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
+		protected.PUT("/lists/:id/status", listHandler.ChangeStatus)
+		protected.PUT("/lists/:id/assign", listHandler.AssignMember)
 	}
 }

@@ -20,28 +20,24 @@ type TaskListFilter struct {
 	Limit  int
 }
 
-func (r *TaskListRepository) applyFilters(userID uint, filter TaskListFilter) *gorm.DB {
-	query := r.db.Model(&models.TaskList{}).Where("user_id = ?", userID)
-	if filter.Search != "" {
-		query = query.Where("title LIKE ?", "%"+filter.Search+"%")
-	}
-	return query
-}
-
 func (r *TaskListRepository) Create(list *models.TaskList) error {
 	return r.db.Create(list).Error
 }
 
-func (r *TaskListRepository) FindAllByUser(userID uint, filter TaskListFilter) ([]models.TaskList, int64, error) {
+// FindAll retorna listas pessoais do usuário e, quando workspaceID não é nil,
+// também todas as listas vinculadas àquele workspace.
+func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter TaskListFilter) ([]models.TaskList, int64, error) {
 	var lists []models.TaskList
 	var total int64
 
-	if err := r.applyFilters(userID, filter).Count(&total).Error; err != nil {
+	base := r.buildQuery(userID, workspaceID, filter)
+
+	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (filter.Page - 1) * filter.Limit
-	if err := r.applyFilters(userID, filter).
+	if err := r.buildQuery(userID, workspaceID, filter).
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Order("position asc").
 		Offset(offset).Limit(filter.Limit).
@@ -52,12 +48,40 @@ func (r *TaskListRepository) FindAllByUser(userID uint, filter TaskListFilter) (
 	return lists, total, nil
 }
 
+func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter TaskListFilter) *gorm.DB {
+	var query *gorm.DB
+	if workspaceID != nil {
+		query = r.db.Model(&models.TaskList{}).Where(
+			"(workspace_id = ?) OR (user_id = ? AND workspace_id IS NULL)",
+			*workspaceID, userID,
+		)
+	} else {
+		query = r.db.Model(&models.TaskList{}).Where("user_id = ? AND workspace_id IS NULL", userID)
+	}
+	if filter.Search != "" {
+		query = query.Where("title LIKE ?", "%"+filter.Search+"%")
+	}
+	return query
+}
+
+// FindByIDAndUser busca lista pelo id verificando posse direta (para listas pessoais).
 func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList, error) {
 	var list models.TaskList
 	if err := r.db.
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&list).Error; err != nil {
+		return nil, err
+	}
+	return &list, nil
+}
+
+// FindByID busca lista pelo id sem restrição de usuário (usado para contexto de workspace).
+func (r *TaskListRepository) FindByID(id uint) (*models.TaskList, error) {
+	var list models.TaskList
+	if err := r.db.
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		First(&list, id).Error; err != nil {
 		return nil, err
 	}
 	return &list, nil

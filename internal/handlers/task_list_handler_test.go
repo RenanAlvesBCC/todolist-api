@@ -62,6 +62,12 @@ func (m *mockTaskListProvider) ReorderLists(userID uint, orderedIDs []uint) erro
 func (m *mockTaskListProvider) ReorderItems(listID, userID uint, orderedIDs []uint) error {
 	return m.reorderItemsFunc(listID, userID, orderedIDs)
 }
+func (m *mockTaskListProvider) ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error {
+	return nil
+}
+func (m *mockTaskListProvider) AssignMember(listID, requesterID, targetUserID uint) error {
+	return nil
+}
 
 // withUserContext simula o que o middleware de autenticação faria: injeta
 // um user_id no contexto antes do handler rodar, sem precisar de um JWT real.

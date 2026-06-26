@@ -8,12 +8,12 @@ import (
 	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
 )
 
-// TaskListStore descreve o que o TaskListService precisa do repository de listas —
-// pode ser o GORM de verdade ou um dublê de teste, contanto que tenha esses métodos.
+// TaskListStore descreve o que o TaskListService precisa do repository de listas.
 type TaskListStore interface {
 	Create(list *models.TaskList) error
-	FindAllByUser(userID uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error)
+	FindAll(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error)
 	FindByIDAndUser(id, userID uint) (*models.TaskList, error)
+	FindByID(id uint) (*models.TaskList, error)
 	Update(list *models.TaskList) error
 	Delete(list *models.TaskList) error
 	NextPosition(userID uint) (int, error)
@@ -30,13 +30,21 @@ type TaskItemStore interface {
 	UpdatePositions(taskListID uint, orderedIDs []uint) error
 }
 
+// WorkspaceContextStore é o subconjunto da interface de workspace que o TaskListService precisa.
+type WorkspaceContextStore interface {
+	FindByMemberUserID(userID uint) (*models.Workspace, error)
+	GetMemberRole(workspaceID, userID uint) (models.WorkspaceRole, error)
+	IsMember(workspaceID, userID uint) (bool, error)
+}
+
 type TaskListService struct {
 	listRepo TaskListStore
 	itemRepo TaskItemStore
+	wsStore  WorkspaceContextStore
 }
 
-func NewTaskListService(listRepo TaskListStore, itemRepo TaskItemStore) *TaskListService {
-	return &TaskListService{listRepo: listRepo, itemRepo: itemRepo}
+func NewTaskListService(listRepo TaskListStore, itemRepo TaskItemStore, wsStore WorkspaceContextStore) *TaskListService {
+	return &TaskListService{listRepo: listRepo, itemRepo: itemRepo, wsStore: wsStore}
 }
 
 func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskList, error) {
@@ -49,7 +57,13 @@ func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskLis
 		return nil, err
 	}
 
-	list := &models.TaskList{Title: title, UserID: userID, Position: position, Items: []models.TaskItem{}}
+	list := &models.TaskList{
+		Title:    title,
+		UserID:   userID,
+		Position: position,
+		Status:   models.StatusEmAndamento,
+		Items:    []models.TaskItem{},
+	}
 	if err := s.listRepo.Create(list); err != nil {
 		return nil, err
 	}
@@ -72,8 +86,15 @@ func (s *TaskListService) ListAll(userID uint, search string, page, limit int) (
 		limit = 20
 	}
 
+	var wsID *uint
+	if s.wsStore != nil {
+		if ws, err := s.wsStore.FindByMemberUserID(userID); err == nil {
+			wsID = &ws.ID
+		}
+	}
+
 	filter := repository.TaskListFilter{Search: search, Page: page, Limit: limit}
-	lists, total, err := s.listRepo.FindAllByUser(userID, filter)
+	lists, total, err := s.listRepo.FindAll(userID, wsID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +110,28 @@ func (s *TaskListService) ListAll(userID uint, search string, page, limit int) (
 	}, nil
 }
 
-func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error) {
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+// resolveList encontra uma lista verificando acesso do usuário (dono direto ou membro do workspace).
+func (s *TaskListService) resolveList(listID, userID uint) (*models.TaskList, error) {
+	list, err := s.listRepo.FindByID(listID)
 	if err != nil {
 		return nil, errors.New("lista não encontrada")
 	}
-	return list, nil
+
+	if list.UserID == userID {
+		return list, nil
+	}
+
+	if list.WorkspaceID != nil && s.wsStore != nil {
+		if ok, _ := s.wsStore.IsMember(*list.WorkspaceID, userID); ok {
+			return list, nil
+		}
+	}
+
+	return nil, errors.New("lista não encontrada")
+}
+
+func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error) {
+	return s.resolveList(listID, userID)
 }
 
 func (s *TaskListService) UpdateList(listID, userID uint, title string) (*models.TaskList, error) {
@@ -131,9 +168,9 @@ func (s *TaskListService) AddItem(listID, userID uint, text string) (*models.Tas
 		return nil, errors.New("texto do item é obrigatório")
 	}
 
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return nil, errors.New("lista não encontrada")
+		return nil, err
 	}
 
 	position, err := s.itemRepo.NextPosition(list.ID)
@@ -153,9 +190,9 @@ func (s *TaskListService) UpdateItem(listID, itemID, userID uint, text string, c
 		return nil, errors.New("texto do item é obrigatório")
 	}
 
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return nil, errors.New("lista não encontrada")
+		return nil, err
 	}
 
 	item, err := s.itemRepo.FindByIDAndList(itemID, list.ID)
@@ -201,4 +238,83 @@ func (s *TaskListService) ReorderItems(listID, userID uint, orderedIDs []uint) e
 		return errors.New("lista de ids vazia")
 	}
 	return s.itemRepo.UpdatePositions(list.ID, orderedIDs)
+}
+
+// validTransitions define as transições permitidas por papel.
+var editorTransitions = map[models.TaskListStatus]map[models.TaskListStatus]bool{
+	models.StatusEmAndamento:         {models.StatusAguardandoOrcamento: true, models.StatusAguardandoPeca: true},
+	models.StatusAguardandoOrcamento: {models.StatusEmAndamento: true, models.StatusAguardandoPeca: true},
+	models.StatusAguardandoPeca:      {models.StatusEmAndamento: true, models.StatusAguardandoOrcamento: true},
+}
+
+func (s *TaskListService) ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error {
+	list, err := s.resolveList(listID, userID)
+	if err != nil {
+		return err
+	}
+
+	role, err := s.getUserRole(list, userID)
+	if err != nil {
+		return err
+	}
+
+	if !isValidTransition(role, list.Status, newStatus) {
+		return errors.New("transição de status não permitida para seu papel")
+	}
+
+	list.Status = newStatus
+	return s.listRepo.Update(list)
+}
+
+func (s *TaskListService) AssignMember(listID, requesterID, targetUserID uint) error {
+	list, err := s.resolveList(listID, requesterID)
+	if err != nil {
+		return err
+	}
+
+	role, err := s.getUserRole(list, requesterID)
+	if err != nil {
+		return err
+	}
+
+	if role != models.RoleOwner && role != models.RoleManager {
+		return errors.New("apenas owner e manager podem atribuir membros")
+	}
+
+	if list.WorkspaceID == nil {
+		return errors.New("atribuição só é possível em listas de workspace")
+	}
+
+	if s.wsStore != nil {
+		targetRole, err := s.wsStore.GetMemberRole(*list.WorkspaceID, targetUserID)
+		if err != nil {
+			return errors.New("usuário não é membro do workspace")
+		}
+		if targetRole != models.RoleEditor {
+			return errors.New("só é possível atribuir mecânicos (editor)")
+		}
+	}
+
+	list.AssignedTo = &targetUserID
+	return s.listRepo.Update(list)
+}
+
+// getUserRole retorna o papel do usuário em relação à lista.
+// Para listas pessoais, o dono recebe papel owner implícito.
+func (s *TaskListService) getUserRole(list *models.TaskList, userID uint) (models.WorkspaceRole, error) {
+	if list.WorkspaceID != nil && s.wsStore != nil {
+		return s.wsStore.GetMemberRole(*list.WorkspaceID, userID)
+	}
+	if list.UserID == userID {
+		return models.RoleOwner, nil
+	}
+	return "", errors.New("acesso negado")
+}
+
+func isValidTransition(role models.WorkspaceRole, from, to models.TaskListStatus) bool {
+	if role == models.RoleOwner || role == models.RoleManager {
+		return true
+	}
+	allowed, ok := editorTransitions[from]
+	return ok && allowed[to]
 }
