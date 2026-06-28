@@ -26,6 +26,9 @@ func Connect() {
 		&models.WorkspaceInvite{},
 		&models.TaskList{},
 		&models.TaskItem{},
+		&models.ListAssignment{},
+		&models.QuoteItem{},
+		&models.PendingFlag{},
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
 	); err != nil {

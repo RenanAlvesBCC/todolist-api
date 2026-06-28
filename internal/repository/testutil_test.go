@@ -31,6 +31,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.WorkspaceInvite{},
 		&models.TaskList{},
 		&models.TaskItem{},
+		&models.ListAssignment{},
 		&models.QuoteItem{},
 		&models.PendingFlag{},
 		&models.TokenBlacklist{},

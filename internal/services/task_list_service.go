@@ -266,39 +266,6 @@ func (s *TaskListService) ChangeStatus(listID, userID uint, newStatus models.Tas
 	return s.listRepo.Update(list)
 }
 
-func (s *TaskListService) AssignMember(listID, requesterID, targetUserID uint) error {
-	list, err := s.resolveList(listID, requesterID)
-	if err != nil {
-		return err
-	}
-
-	role, err := s.getUserRole(list, requesterID)
-	if err != nil {
-		return err
-	}
-
-	if role != models.RoleOwner && role != models.RoleManager {
-		return errors.New("apenas owner e manager podem atribuir membros")
-	}
-
-	if list.WorkspaceID == nil {
-		return errors.New("atribuição só é possível em listas de workspace")
-	}
-
-	if s.wsStore != nil {
-		targetRole, err := s.wsStore.GetMemberRole(*list.WorkspaceID, targetUserID)
-		if err != nil {
-			return errors.New("usuário não é membro do workspace")
-		}
-		if targetRole != models.RoleEditor {
-			return errors.New("só é possível atribuir mecânicos (editor)")
-		}
-	}
-
-	list.AssignedTo = &targetUserID
-	return s.listRepo.Update(list)
-}
-
 // getUserRole retorna o papel do usuário em relação à lista.
 // Para listas pessoais, o dono recebe papel owner implícito.
 func (s *TaskListService) getUserRole(list *models.TaskList, userID uint) (models.WorkspaceRole, error) {

@@ -15,6 +15,7 @@ func SetupRoutes(
 	workspaceHandler *handlers.WorkspaceHandler,
 	quoteHandler *handlers.QuoteHandler,
 	flagHandler *handlers.PendingFlagHandler,
+	assignmentHandler *handlers.AssignmentHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.SecurityHeaders())
@@ -59,7 +60,11 @@ func SetupRoutes(
 		protected.PUT("/lists/:id/items/:itemId", listHandler.UpdateItem)
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
 		protected.PUT("/lists/:id/status", listHandler.ChangeStatus)
-		protected.PUT("/lists/:id/assign", listHandler.AssignMember)
+
+		// Atribuições de mecânicos (Fase A.1)
+		protected.GET("/lists/:id/assignments", assignmentHandler.List)
+		protected.POST("/lists/:id/assignments", assignmentHandler.Assign)
+		protected.DELETE("/lists/:id/assignments/:userId", assignmentHandler.Unassign)
 
 		// Orçamentos (Fase C)
 		protected.POST("/lists/:id/quotes", quoteHandler.Add)

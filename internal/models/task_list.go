@@ -14,11 +14,11 @@ const (
 
 type TaskList struct {
 	gorm.Model
-	Title       string         `gorm:"not null" json:"title"`
-	UserID      uint           `gorm:"not null" json:"user_id"`
-	WorkspaceID *uint          `json:"workspace_id"`
-	AssignedTo  *uint          `json:"assigned_to"`
-	Status      TaskListStatus `gorm:"not null;default:'em_andamento'" json:"status"`
-	Position    int            `gorm:"not null;default:0" json:"position"`
-	Items       []TaskItem     `gorm:"foreignKey:TaskListID" json:"items"`
+	Title       string           `gorm:"not null" json:"title"`
+	UserID      uint             `gorm:"not null" json:"user_id"`
+	WorkspaceID *uint            `json:"workspace_id"`
+	Status      TaskListStatus   `gorm:"not null;default:'em_andamento'" json:"status"`
+	Position    int              `gorm:"not null;default:0" json:"position"`
+	Items       []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`
+	Assignments []ListAssignment `gorm:"foreignKey:TaskListID" json:"assignments,omitempty"`
 }

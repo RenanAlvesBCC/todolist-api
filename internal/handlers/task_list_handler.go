@@ -25,7 +25,6 @@ type TaskListProvider interface {
 	ReorderLists(userID uint, orderedIDs []uint) error
 	ReorderItems(listID, userID uint, orderedIDs []uint) error
 	ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error
-	AssignMember(listID, requesterID, targetUserID uint) error
 }
 
 type TaskListHandler struct {
@@ -262,26 +261,3 @@ func (h *TaskListHandler) ChangeStatus(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-type assignInput struct {
-	UserID uint `json:"user_id" binding:"required"`
-}
-
-func (h *TaskListHandler) AssignMember(c *gin.Context) {
-	listID, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "id inválido")
-		return
-	}
-
-	var input assignInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
-		return
-	}
-
-	if err := h.listService.AssignMember(uint(listID), getUserID(c), input.UserID); err != nil {
-		utils.RespondError(c, http.StatusForbidden, err.Error())
-		return
-	}
-	c.Status(http.StatusNoContent)
-}

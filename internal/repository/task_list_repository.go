@@ -39,6 +39,7 @@ func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter Task
 	offset := (filter.Page - 1) * filter.Limit
 	if err := r.buildQuery(userID, workspaceID, filter).
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Preload("Assignments").
 		Order("position asc").
 		Offset(offset).Limit(filter.Limit).
 		Find(&lists).Error; err != nil {
@@ -69,6 +70,7 @@ func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList,
 	var list models.TaskList
 	if err := r.db.
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Preload("Assignments").
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&list).Error; err != nil {
 		return nil, err
@@ -81,6 +83,7 @@ func (r *TaskListRepository) FindByID(id uint) (*models.TaskList, error) {
 	var list models.TaskList
 	if err := r.db.
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Preload("Assignments").
 		First(&list, id).Error; err != nil {
 		return nil, err
 	}
