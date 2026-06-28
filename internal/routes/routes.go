@@ -18,6 +18,7 @@ func SetupRoutes(
 	assignmentHandler *handlers.AssignmentHandler,
 	secRepo *repository.SecurityRepository,
 ) {
+	router.Use(middleware.CORS())
 	router.Use(middleware.SecurityHeaders())
 	router.Use(middleware.RateLimitGlobal())
 	router.GET("/", handlers.HomeHandler)
