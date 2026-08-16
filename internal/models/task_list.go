@@ -1,7 +1,5 @@
 package models
 
-import "gorm.io/gorm"
-
 type TaskListStatus string
 
 const (
@@ -13,7 +11,7 @@ const (
 )
 
 type TaskList struct {
-	gorm.Model
+	Base
 	Title       string           `gorm:"not null" json:"title"`
 	UserID      uint             `gorm:"not null" json:"user_id"`
 	WorkspaceID *uint            `json:"workspace_id"`

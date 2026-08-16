@@ -1,11 +1,9 @@
 package models
 
-import "gorm.io/gorm"
-
 // TaskItem representa um item marcável dentro de uma TaskList
 // (ex: "Leite" dentro do bloco "Compras da semana").
 type TaskItem struct {
-	gorm.Model
+	Base
 	Text       string `gorm:"not null" json:"text"`
 	Completed  bool   `gorm:"default:false" json:"completed"`
 	Position   int    `gorm:"not null;default:0" json:"position"`

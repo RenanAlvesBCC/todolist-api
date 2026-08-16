@@ -1,10 +1,6 @@
 package models
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
+import "time"
 
 type WorkspaceRole string
 
@@ -15,7 +11,7 @@ const (
 )
 
 type Workspace struct {
-	gorm.Model
+	Base
 	Name        string            `gorm:"not null" json:"name"`
 	Description string            `json:"description"`
 	OwnerID     uint              `gorm:"not null" json:"owner_id"`
