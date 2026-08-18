@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 // StartTokenCleanup roda em background e remove tokens expirados

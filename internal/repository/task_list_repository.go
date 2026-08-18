@@ -3,7 +3,7 @@ package repository
 import (
 	"gorm.io/gorm"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type TaskListRepository struct {
@@ -15,9 +15,11 @@ func NewTaskListRepository(db *gorm.DB) *TaskListRepository {
 }
 
 type TaskListFilter struct {
-	Search string
-	Page   int
-	Limit  int
+	Search       string
+	Page         int
+	Limit        int
+	Status       string
+	AssignedToID *uint
 }
 
 func (r *TaskListRepository) Create(list *models.TaskList) error {
@@ -61,6 +63,15 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 	}
 	if filter.Search != "" {
 		query = query.Where("title LIKE ?", "%"+filter.Search+"%")
+	}
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	}
+	if filter.AssignedToID != nil {
+		sub := r.db.Model(&models.ListAssignment{}).
+			Select("task_list_id").
+			Where("user_id = ?", *filter.AssignedToID)
+		query = query.Where("id IN (?)", sub)
 	}
 	return query
 }

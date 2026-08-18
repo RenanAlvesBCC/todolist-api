@@ -4,8 +4,8 @@ import (
 	"errors"
 	"math"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 // TaskListStore descreve o que o TaskListService precisa do repository de listas.
@@ -47,9 +47,30 @@ func NewTaskListService(listRepo TaskListStore, itemRepo TaskItemStore, wsStore 
 	return &TaskListService{listRepo: listRepo, itemRepo: itemRepo, wsStore: wsStore}
 }
 
+func (s *TaskListService) requireManager(userID uint) error {
+	if s.wsStore == nil {
+		return nil
+	}
+	ws, err := s.wsStore.FindByMemberUserID(userID)
+	if err != nil {
+		return nil
+	}
+	role, err := s.wsStore.GetMemberRole(ws.ID, userID)
+	if err != nil {
+		return ErrNotFound
+	}
+	if role == models.RoleEditor {
+		return ErrNotManager
+	}
+	return nil
+}
+
 func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskList, error) {
 	if title == "" {
 		return nil, errors.New("título é obrigatório")
+	}
+	if err := s.requireManager(userID); err != nil {
+		return nil, err
 	}
 
 	position, err := s.listRepo.NextPosition(userID)
@@ -57,12 +78,21 @@ func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskLis
 		return nil, err
 	}
 
+	var wsID *uint
+	if s.wsStore != nil {
+		if ws, err := s.wsStore.FindByMemberUserID(userID); err == nil {
+			id := ws.ID
+			wsID = &id
+		}
+	}
+
 	list := &models.TaskList{
-		Title:    title,
-		UserID:   userID,
-		Position: position,
-		Status:   models.StatusEmAndamento,
-		Items:    []models.TaskItem{},
+		Title:       title,
+		UserID:      userID,
+		WorkspaceID: wsID,
+		Position:    position,
+		Status:      models.StatusEmAndamento,
+		Items:       []models.TaskItem{},
 	}
 	if err := s.listRepo.Create(list); err != nil {
 		return nil, err
@@ -78,7 +108,7 @@ type PaginatedTaskLists struct {
 	TotalPages int               `json:"total_pages"`
 }
 
-func (s *TaskListService) ListAll(userID uint, search string, page, limit int) (*PaginatedTaskLists, error) {
+func (s *TaskListService) ListAll(userID uint, search string, page, limit int, status string, mine bool) (*PaginatedTaskLists, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -87,13 +117,31 @@ func (s *TaskListService) ListAll(userID uint, search string, page, limit int) (
 	}
 
 	var wsID *uint
+	var assignedTo *uint
 	if s.wsStore != nil {
 		if ws, err := s.wsStore.FindByMemberUserID(userID); err == nil {
 			wsID = &ws.ID
+			role, _ := s.wsStore.GetMemberRole(ws.ID, userID)
+			if role == models.RoleEditor || mine {
+				id := userID
+				assignedTo = &id
+			}
+		} else if mine {
+			id := userID
+			assignedTo = &id
 		}
+	} else if mine {
+		id := userID
+		assignedTo = &id
 	}
 
-	filter := repository.TaskListFilter{Search: search, Page: page, Limit: limit}
+	filter := repository.TaskListFilter{
+		Search:       search,
+		Page:         page,
+		Limit:        limit,
+		Status:       status,
+		AssignedToID: assignedTo,
+	}
 	lists, total, err := s.listRepo.FindAll(userID, wsID, filter)
 	if err != nil {
 		return nil, err
@@ -110,24 +158,15 @@ func (s *TaskListService) ListAll(userID uint, search string, page, limit int) (
 	}, nil
 }
 
-// resolveList encontra uma lista verificando acesso do usuário (dono direto ou membro do workspace).
 func (s *TaskListService) resolveList(listID, userID uint) (*models.TaskList, error) {
 	list, err := s.listRepo.FindByID(listID)
 	if err != nil {
-		return nil, errors.New("lista não encontrada")
+		return nil, ErrNotFound
 	}
-
-	if list.UserID == userID {
-		return list, nil
+	if err := checkVehicleAccess(list, userID, s.wsStore); err != nil {
+		return nil, err
 	}
-
-	if list.WorkspaceID != nil && s.wsStore != nil {
-		if ok, _ := s.wsStore.IsMember(*list.WorkspaceID, userID); ok {
-			return list, nil
-		}
-	}
-
-	return nil, errors.New("lista não encontrada")
+	return list, nil
 }
 
 func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error) {
@@ -138,10 +177,13 @@ func (s *TaskListService) UpdateList(listID, userID uint, title string) (*models
 	if title == "" {
 		return nil, errors.New("título é obrigatório")
 	}
+	if err := s.requireManager(userID); err != nil {
+		return nil, err
+	}
 
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return nil, errors.New("lista não encontrada")
+		return nil, err
 	}
 
 	list.Title = title
@@ -152,9 +194,13 @@ func (s *TaskListService) UpdateList(listID, userID uint, title string) (*models
 }
 
 func (s *TaskListService) DeleteList(listID, userID uint) error {
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	if err := s.requireManager(userID); err != nil {
+		return err
+	}
+
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return errors.New("lista não encontrada")
+		return err
 	}
 
 	if err := s.itemRepo.DeleteAllByList(list.ID); err != nil {
@@ -209,9 +255,9 @@ func (s *TaskListService) UpdateItem(listID, itemID, userID uint, text string, c
 }
 
 func (s *TaskListService) DeleteItem(listID, itemID, userID uint) error {
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return errors.New("lista não encontrada")
+		return err
 	}
 
 	item, err := s.itemRepo.FindByIDAndList(itemID, list.ID)
@@ -223,6 +269,9 @@ func (s *TaskListService) DeleteItem(listID, itemID, userID uint) error {
 }
 
 func (s *TaskListService) ReorderLists(userID uint, orderedIDs []uint) error {
+	if err := s.requireManager(userID); err != nil {
+		return err
+	}
 	if len(orderedIDs) == 0 {
 		return errors.New("lista de ids vazia")
 	}
@@ -230,9 +279,9 @@ func (s *TaskListService) ReorderLists(userID uint, orderedIDs []uint) error {
 }
 
 func (s *TaskListService) ReorderItems(listID, userID uint, orderedIDs []uint) error {
-	list, err := s.listRepo.FindByIDAndUser(listID, userID)
+	list, err := s.resolveList(listID, userID)
 	if err != nil {
-		return errors.New("lista não encontrada")
+		return err
 	}
 	if len(orderedIDs) == 0 {
 		return errors.New("lista de ids vazia")

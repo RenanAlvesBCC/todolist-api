@@ -1,61 +1,305 @@
-GET http://localhost:8080/
+@baseUrl = https://todolist-api-tq9d.onrender.com
+# Local: http://localhost:8080
+@owner = gerente@teste.com
+@mechanic = mecanico@teste.com
+@password = abcd@1234
 
-### Registrar usuário
-# POST http://localhost:8080/register
-POST https://todolist-api-tq9d.onrender.com/register
+### Health
+GET {{baseUrl}}/
+
+### Registrar owner
+# @name registerOwner
+POST {{baseUrl}}/register
 Content-Type: application/json
 
 {
-  "username": "renanAlves",
-  "password": "abcd@1234"
+  "username": "{{owner}}",
+  "password": "{{password}}"
 }
 
-### Login
-# POST http://localhost:8080/login
-POST https://todolist-api-tq9d.onrender.com/login
+### Login owner
+# @name loginOwner
+POST {{baseUrl}}/login
 Content-Type: application/json
 
 {
-  "username": "RenanAlves",
-  "password": "abcd@1234"
+  "username": "{{owner}}",
+  "password": "{{password}}"
 }
 
-### Perfil sem token (deve dar 401)
-GET http://localhost:8080/api/profile
-
-### Perfil com token (cole o token que veio do login)
-GET http://localhost:8080/api/profile
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE4MzIxMDIsImlhdCI6MTc4MTc0NTcwMiwidXNlcl9pZCI6MSwidXNlcm5hbWUiOiJyZW5hbiJ9.lS0ULfIYNxG9QAagpGjbD3O-n47MukpYflrRxYjQF4s
-
-### Criar tarefa
-POST http://localhost:8080/api/tasks
+### Registrar mecanico
+# @name registerMechanic
+POST {{baseUrl}}/register
 Content-Type: application/json
-Authorization: Bearer COLE_O_TOKEN_AQUI
 
 {
-  "title": "Estudar Go",
-  "description": "Terminar a fase 5 do projeto"
+  "username": "{{mechanic}}",
+  "password": "{{password}}"
 }
 
-### Listar tarefas
-GET http://localhost:8080/api/tasks
-Authorization: Bearer COLE_O_TOKEN_AQUI
-
-### Buscar uma tarefa específica (troque o 1 pelo id retornado na criação)
-GET http://localhost:8080/api/tasks/1
-Authorization: Bearer COLE_O_TOKEN_AQUI
-
-### Marcar como concluída
-PUT http://localhost:8080/api/tasks/1
+### Login mecanico
+# @name loginMechanic
+POST {{baseUrl}}/login
 Content-Type: application/json
-Authorization: Bearer COLE_O_TOKEN_AQUI
 
 {
-  "title": "Estudar Go",
-  "description": "Terminar a fase 5 do projeto",
+  "username": "{{mechanic}}",
+  "password": "{{password}}"
+}
+
+### Login invalido
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+  "username": "{{owner}}",
+  "password": "senha-errada"
+}
+
+### Listas sem token
+GET {{baseUrl}}/api/lists
+
+### Criar workspace
+# @name createWorkspace
+POST {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "RMAXX Auto",
+  "description": "Gestao de veiculos"
+}
+
+### Workspace duplicado
+POST {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Outra oficina"
+}
+
+### Buscar workspace
+GET {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Atualizar workspace
+PUT {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "RMAXX Auto",
+  "description": "Atualizado"
+}
+
+### Gerar convite
+# @name createInvite
+POST {{baseUrl}}/api/workspace/invites
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "role": "editor"
+}
+
+### Listar convites
+GET {{baseUrl}}/api/workspace/invites
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Preview do convite
+GET {{baseUrl}}/invites/{{createInvite.response.body.code}}/preview
+
+### Aceitar convite
+POST {{baseUrl}}/api/invites/{{createInvite.response.body.code}}/accept
+Authorization: Bearer {{loginMechanic.response.body.token}}
+
+### Listar membros
+GET {{baseUrl}}/api/workspace/members
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Criar veiculo
+# @name createList
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 ABC-1234"
+}
+
+### Criar segundo veiculo
+# @name createList2
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Gol 2010 XYZ-9876"
+}
+
+### Listar veiculos
+GET {{baseUrl}}/api/lists?page=1&limit=20
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Buscar veiculos
+GET {{baseUrl}}/api/lists?search=Fusca
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Buscar veiculo por id
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Atualizar titulo do veiculo
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 ABC-1234 revisao"
+}
+
+### Reordenar veiculos
+PUT {{baseUrl}}/api/lists/reorder
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "ids": [{{createList2.response.body.id}}, {{createList.response.body.id}}]
+}
+
+### Adicionar item
+# @name addItem
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Troca de oleo"
+}
+
+### Adicionar segundo item
+# @name addItem2
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Pastilha de freio"
+}
+
+### Atualizar item
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Troca de oleo",
   "completed": true
 }
 
-### Excluir tarefa
-DELETE http://localhost:8080/api/tasks/1
-Authorization: Bearer COLE_O_TOKEN_AQUI
+### Reordenar itens
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/reorder
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "ids": [{{addItem2.response.body.id}}, {{addItem.response.body.id}}]
+}
+
+### Alterar status
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/status
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "aguardando_orcamento"
+}
+
+### Adicionar orcamento
+# @name addQuote
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Pastilha de freio R$120"
+}
+
+### Listar orcamentos
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Adicionar pendencia
+# @name addFlag
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "flag_type": "aguardando_peca",
+  "note": ""
+}
+
+### Pendencia outro com nota curta
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "flag_type": "outro",
+  "note": "curto"
+}
+
+### Listar pendencias
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Resolver pendencia
+PATCH {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags/{{addFlag.response.body.id}}/resolve
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Atribuir mecanico
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "user_id": 2
+}
+
+### Listar atribuicoes
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Remover orcamento
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes/{{addQuote.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Remover item
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem2.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Excluir veiculo
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Logout
+POST {{baseUrl}}/api/logout
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Meu workspace (inclui role)
+GET {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Esteira do mecanico
+GET {{baseUrl}}/api/lists?mine=true
+Authorization: Bearer {{loginMechanic.response.body.token}}
+
+### Patio filtrado por status
+GET {{baseUrl}}/api/lists?status=em_andamento
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Auditoria
+GET {{baseUrl}}/api/audit?page=1&limit=20
+Authorization: Bearer {{loginOwner.response.body.token}}

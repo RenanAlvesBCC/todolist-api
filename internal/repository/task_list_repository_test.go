@@ -2,11 +2,12 @@ package repository
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 func TestTaskListRepository_CreateAndFindByIDAndUser(t *testing.T) {
@@ -103,4 +104,87 @@ func TestTaskListRepository_UpdatePositions_ReordersOnlyOwnedLists(t *testing.T)
 	require.Len(t, lists, 2)
 	assert.Equal(t, "B", lists[0].Title)
 	assert.Equal(t, "A", lists[1].Title)
+}
+
+func TestTaskListRepository_FindByIDAndUpdate(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTaskListRepository(db)
+
+	list := &models.TaskList{Title: "Fusca", UserID: 1, Status: models.StatusEmAndamento}
+	require.NoError(t, repo.Create(list))
+
+	found, err := repo.FindByID(list.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Fusca", found.Title)
+
+	_, err = repo.FindByID(999)
+	assert.Error(t, err)
+
+	found.Title = "Fusca 1980"
+	found.Status = models.StatusAguardandoPeca
+	require.NoError(t, repo.Update(found))
+
+	updated, err := repo.FindByID(list.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Fusca 1980", updated.Title)
+	assert.Equal(t, models.StatusAguardandoPeca, updated.Status)
+}
+
+func TestTaskListRepository_FindAll_StatusAndAssignedFilters(t *testing.T) {
+	db := setupTestDB(t)
+	listRepo := NewTaskListRepository(db)
+	assignRepo := NewListAssignmentRepository(db)
+
+	wsID := uint(10)
+	a := &models.TaskList{Title: "A", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEmAndamento}
+	b := &models.TaskList{Title: "B", UserID: 1, WorkspaceID: &wsID, Status: models.StatusConcluido}
+	require.NoError(t, listRepo.Create(a))
+	require.NoError(t, listRepo.Create(b))
+	require.NoError(t, assignRepo.Assign(&models.ListAssignment{TaskListID: a.ID, UserID: 5, AssignedBy: 1, AssignedAt: time.Now()}))
+
+	byStatus, total, err := listRepo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusConcluido), Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, byStatus, 1)
+	assert.Equal(t, "B", byStatus[0].Title)
+
+	assignedTo := uint(5)
+	mine, total, err := listRepo.FindAll(1, &wsID, TaskListFilter{AssignedToID: &assignedTo, Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, mine, 1)
+	assert.Equal(t, "A", mine[0].Title)
+}
+
+func TestTaskListRepository_FindAll_WorkspaceStatusAndAssigned(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTaskListRepository(db)
+	assignRepo := NewListAssignmentRepository(db)
+
+	wsID := uint(10)
+	a := &models.TaskList{Title: "Gol", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEmAndamento}
+	b := &models.TaskList{Title: "Uno", UserID: 1, WorkspaceID: &wsID, Status: models.StatusAprovado}
+	personal := &models.TaskList{Title: "Pessoal", UserID: 1}
+	require.NoError(t, repo.Create(a))
+	require.NoError(t, repo.Create(b))
+	require.NoError(t, repo.Create(personal))
+	require.NoError(t, assignRepo.Assign(&models.ListAssignment{TaskListID: a.ID, UserID: 5, AssignedBy: 1, AssignedAt: time.Now()}))
+
+	all, total, err := repo.FindAll(1, &wsID, TaskListFilter{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+	assert.Len(t, all, 3)
+
+	byStatus, stTotal, err := repo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusAprovado), Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), stTotal)
+	require.Len(t, byStatus, 1)
+	assert.Equal(t, "Uno", byStatus[0].Title)
+
+	assignedTo := uint(5)
+	mine, mineTotal, err := repo.FindAll(1, &wsID, TaskListFilter{AssignedToID: &assignedTo, Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), mineTotal)
+	require.Len(t, mine, 1)
+	assert.Equal(t, "Gol", mine[0].Title)
 }

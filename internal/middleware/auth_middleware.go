@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 // AuthRequired protege rotas exigindo um token JWT válido no header Authorization,

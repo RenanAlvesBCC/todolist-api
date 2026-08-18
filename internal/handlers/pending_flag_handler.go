@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 type PendingFlagProvider interface {

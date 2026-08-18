@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 func TestWorkspaceRepository_CreateAndFindByOwner(t *testing.T) {
@@ -122,4 +122,136 @@ func TestWorkspaceRepository_FindByMemberUserID(t *testing.T) {
 	found, err := repo.FindByMemberUserID(5)
 	require.NoError(t, err)
 	assert.Equal(t, ws.ID, found.ID)
+}
+
+func TestWorkspaceRepository_UpdateFindMemberListAndInvites(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewWorkspaceRepository(db)
+
+	ws := &models.Workspace{Name: "Oficina", Description: "a", OwnerID: 1}
+	require.NoError(t, repo.Create(ws))
+
+	ws.Name = "Oficina Centro"
+	require.NoError(t, repo.Update(ws))
+	byID, err := repo.FindByID(ws.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Oficina Centro", byID.Name)
+
+	member := &models.WorkspaceMember{WorkspaceID: ws.ID, UserID: 2, Role: models.RoleEditor, JoinedAt: time.Now()}
+	require.NoError(t, repo.AddMember(member))
+
+	foundMember, err := repo.FindMember(ws.ID, 2)
+	require.NoError(t, err)
+	assert.Equal(t, models.RoleEditor, foundMember.Role)
+
+	_, err = repo.FindMember(ws.ID, 99)
+	assert.Error(t, err)
+
+	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, 2))
+
+	members, err := repo.ListMembers(ws.ID)
+	require.NoError(t, err)
+	assert.Len(t, members, 1)
+
+	invite := &models.WorkspaceInvite{
+		WorkspaceID: ws.ID, InvitedBy: 1, Code: "code-1", Role: models.RoleEditor, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, repo.CreateInvite(invite))
+
+	invites, err := repo.ListInvites(ws.ID)
+	require.NoError(t, err)
+	assert.Len(t, invites, 1)
+
+	now := time.Now()
+	uid := uint(2)
+	invite.UsedAt = &now
+	invite.UsedBy = &uid
+	require.NoError(t, repo.MarkInviteUsed(invite))
+
+	used, err := repo.FindInviteByCode("code-1")
+	require.NoError(t, err)
+	assert.NotNil(t, used.UsedAt)
+
+	_, err = repo.FindInviteByCode("missing")
+	assert.Error(t, err)
+
+	_, err = repo.GetMemberRole(ws.ID, 99)
+	assert.Error(t, err)
+
+	_, err = repo.FindByMemberUserID(99)
+	assert.Error(t, err)
+}
+
+func TestWorkspaceRepository_FindByIDUpdateAndMembers(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewWorkspaceRepository(db)
+
+	ws := &models.Workspace{Name: "Oficina", OwnerID: 1, Description: "a"}
+	require.NoError(t, repo.Create(ws))
+
+	found, err := repo.FindByID(ws.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Oficina", found.Name)
+
+	_, err = repo.FindByID(999)
+	assert.Error(t, err)
+
+	ws.Name = "Oficina Nova"
+	require.NoError(t, repo.Update(ws))
+	updated, err := repo.FindByID(ws.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Oficina Nova", updated.Name)
+
+	member := &models.WorkspaceMember{WorkspaceID: ws.ID, UserID: 2, Role: models.RoleEditor, JoinedAt: time.Now()}
+	require.NoError(t, repo.AddMember(member))
+
+	got, err := repo.FindMember(ws.ID, 2)
+	require.NoError(t, err)
+	assert.Equal(t, models.RoleEditor, got.Role)
+
+	_, err = repo.FindMember(ws.ID, 99)
+	assert.Error(t, err)
+
+	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, 2))
+	members, err := repo.ListMembers(ws.ID)
+	require.NoError(t, err)
+	assert.Len(t, members, 1)
+	assert.NotNil(t, members[0].LastSeenAt)
+
+	_, err = repo.FindByMemberUserID(99)
+	assert.Error(t, err)
+
+	_, err = repo.GetMemberRole(ws.ID, 99)
+	assert.Error(t, err)
+}
+
+func TestWorkspaceRepository_ListInvitesAndMarkUsed(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewWorkspaceRepository(db)
+
+	ws := &models.Workspace{Name: "Oficina", OwnerID: 1}
+	require.NoError(t, repo.Create(ws))
+
+	invite := &models.WorkspaceInvite{
+		WorkspaceID: ws.ID, InvitedBy: 1, Code: "code-1",
+		Role: models.RoleEditor, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, repo.CreateInvite(invite))
+
+	listed, err := repo.ListInvites(ws.ID)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+
+	_, err = repo.FindInviteByCode("missing")
+	assert.Error(t, err)
+
+	now := time.Now()
+	uid := uint(2)
+	invite.UsedAt = &now
+	invite.UsedBy = &uid
+	require.NoError(t, repo.MarkInviteUsed(invite))
+
+	found, err := repo.FindInviteByCode("code-1")
+	require.NoError(t, err)
+	assert.NotNil(t, found.UsedAt)
 }

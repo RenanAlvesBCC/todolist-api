@@ -6,9 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type mockQuoteStore struct {
@@ -40,7 +39,7 @@ func (m *mockQuoteStore) Delete(q *models.QuoteItem) error {
 func quoteListStore(userID uint) *mockTaskListStore {
 	return &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: userID}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: userID}, nil
 		},
 	}
 }

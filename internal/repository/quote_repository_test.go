@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 func TestQuoteRepository_CreateAndList(t *testing.T) {
@@ -43,4 +43,22 @@ func TestQuoteRepository_Delete(t *testing.T) {
 	items, err := repo.ListByTaskList(list.ID)
 	require.NoError(t, err)
 	assert.Empty(t, items)
+}
+
+func TestQuoteRepository_FindByID(t *testing.T) {
+	db := setupTestDB(t)
+	listRepo := NewTaskListRepository(db)
+	repo := NewQuoteRepository(db)
+
+	list := &models.TaskList{Title: "Fusca", UserID: 1, Status: models.StatusEmAndamento}
+	require.NoError(t, listRepo.Create(list))
+	q := &models.QuoteItem{TaskListID: list.ID, SubmittedBy: 1, Text: "Filtro"}
+	require.NoError(t, repo.Create(q))
+
+	found, err := repo.FindByID(q.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Filtro", found.Text)
+
+	_, err = repo.FindByID(999)
+	assert.Error(t, err)
 }

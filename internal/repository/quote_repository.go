@@ -3,7 +3,7 @@ package repository
 import (
 	"gorm.io/gorm"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type QuoteRepository struct {

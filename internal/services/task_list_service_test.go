@@ -6,10 +6,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 // ---- mocks ----
@@ -183,8 +182,8 @@ func TestTaskListService_DeleteList_RemovesItemsBeforeList(t *testing.T) {
 	var deletedList bool
 
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: userID}, nil
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
 		},
 		deleteFunc: func(list *models.TaskList) error {
 			deletedList = true
@@ -206,7 +205,7 @@ func TestTaskListService_DeleteList_RemovesItemsBeforeList(t *testing.T) {
 
 func TestTaskListService_DeleteList_NotFoundReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return nil, errors.New("record not found")
 		},
 	}
@@ -220,12 +219,12 @@ func TestTaskListService_DeleteList_NotFoundReturnsError(t *testing.T) {
 func TestTaskListService_UpdateItem_Success(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: 1}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
 		},
 	}
 	itemStore := &mockTaskItemStore{
 		findByIDAndListFunc: func(id, taskListID uint) (*models.TaskItem, error) {
-			return &models.TaskItem{Model: gorm.Model{ID: id}, TaskListID: taskListID}, nil
+			return &models.TaskItem{Base: models.Base{ID: id}, TaskListID: taskListID}, nil
 		},
 		updateFunc: func(item *models.TaskItem) error { return nil },
 	}
@@ -241,7 +240,7 @@ func TestTaskListService_UpdateItem_Success(t *testing.T) {
 func TestTaskListService_UpdateItem_ListNotOwnedByUserReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: 2}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 2}, nil
 		},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
@@ -277,7 +276,7 @@ func TestTaskListService_ReorderLists_EmptyIDsReturnsError(t *testing.T) {
 
 func TestTaskListService_ReorderItems_ListNotOwnedReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return nil, errors.New("record not found")
 		},
 	}
@@ -295,15 +294,16 @@ func TestTaskListService_ChangeStatus_EditorValidTransition(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
+				Assignments: []models.ListAssignment{{UserID: 5}},
 			}, nil
 		},
 		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
@@ -318,14 +318,15 @@ func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
+				Assignments: []models.ListAssignment{{UserID: 5}},
 			}, nil
 		},
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
@@ -340,7 +341,7 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusAguardandoOrcamento,
 			}, nil
@@ -348,7 +349,7 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
@@ -356,5 +357,218 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 	err := service.ChangeStatus(1, 1, models.StatusAprovado)
 
 	require.NoError(t, err)
+}
+
+func TestTaskListService_CreateList_EditorForbidden(t *testing.T) {
+	wsID := uint(10)
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, ws)
+
+	_, err := service.CreateList(5, "Gol 2012")
+
+	assert.ErrorIs(t, err, ErrNotManager)
+}
+
+func TestTaskListService_ListAll_EditorSetsAssignedFilter(t *testing.T) {
+	wsID := uint(10)
+	var got repository.TaskListFilter
+	store := &mockTaskListStore{
+		findAllFunc: func(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error) {
+			got = filter
+			return nil, 0, nil
+		},
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
+
+	_, err := service.ListAll(5, "", 1, 20, "em_andamento", false)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.AssignedToID)
+	assert.Equal(t, uint(5), *got.AssignedToID)
+	assert.Equal(t, "em_andamento", got.Status)
+}
+
+func TestTaskListService_GetList_EditorNotAssignedReturnsNotFound(t *testing.T) {
+	wsID := uint(10)
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{
+				Base:        models.Base{ID: id},
+				WorkspaceID: &wsID,
+				Assignments: []models.ListAssignment{{UserID: 99}},
+			}, nil
+		},
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
+
+	_, err := service.GetList(1, 5)
+
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestTaskListService_UpdateList_Success(t *testing.T) {
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, Title: "old"}, nil
+		},
+		updateFunc: func(list *models.TaskList) error { return nil },
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+
+	list, err := svc.UpdateList(1, 1, "Civic")
+	require.NoError(t, err)
+	assert.Equal(t, "Civic", list.Title)
+
+	_, err = svc.UpdateList(1, 1, "")
+	assert.EqualError(t, err, "título é obrigatório")
+}
+
+func TestTaskListService_AddItemAndDeleteItem(t *testing.T) {
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
+		},
+	}
+	itemStore := &mockTaskItemStore{
+		nextPositionFunc: func(taskListID uint) (int, error) { return 2, nil },
+		createFunc: func(item *models.TaskItem) error {
+			item.ID = 10
+			return nil
+		},
+		findByIDAndListFunc: func(id, taskListID uint) (*models.TaskItem, error) {
+			return &models.TaskItem{Base: models.Base{ID: id}, TaskListID: taskListID}, nil
+		},
+		deleteFunc: func(item *models.TaskItem) error { return nil },
+	}
+	svc := NewTaskListService(store, itemStore, nil)
+
+	item, err := svc.AddItem(1, 1, "óleo")
+	require.NoError(t, err)
+	assert.Equal(t, "óleo", item.Text)
+
+	_, err = svc.AddItem(1, 1, "")
+	assert.EqualError(t, err, "texto do item é obrigatório")
+
+	require.NoError(t, svc.DeleteItem(1, 10, 1))
+
+	itemStore.findByIDAndListFunc = func(id, taskListID uint) (*models.TaskItem, error) {
+		return nil, errors.New("not found")
+	}
+	err = svc.DeleteItem(1, 99, 1)
+	assert.EqualError(t, err, "item não encontrado")
+}
+
+func TestTaskListService_ListAll_DefaultsAndMine(t *testing.T) {
+	var got repository.TaskListFilter
+	store := &mockTaskListStore{
+		findAllFunc: func(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error) {
+			got = filter
+			return []models.TaskList{{Title: "Gol"}}, 1, nil
+		},
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+
+	result, err := svc.ListAll(1, "gol", 0, 0, "", true)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.Limit)
+	require.NotNil(t, got.AssignedToID)
+	assert.Equal(t, uint(1), *got.AssignedToID)
+	assert.Equal(t, 1, result.TotalPages)
+}
+
+func TestTaskListService_ListAll_FindAllError(t *testing.T) {
+	store := &mockTaskListStore{
+		findAllFunc: func(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error) {
+			return nil, 0, errors.New("db")
+		},
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+	_, err := svc.ListAll(1, "", 1, 20, "", false)
+	assert.EqualError(t, err, "db")
+}
+
+func TestTaskListService_ReorderItems_Success(t *testing.T) {
+	var received []uint
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
+		},
+	}
+	itemStore := &mockTaskItemStore{
+		updatePositionsFunc: func(taskListID uint, orderedIDs []uint) error {
+			received = orderedIDs
+			return nil
+		},
+	}
+	svc := NewTaskListService(store, itemStore, nil)
+	require.NoError(t, svc.ReorderItems(1, 1, []uint{2, 1}))
+	assert.Equal(t, []uint{2, 1}, received)
+
+	err := svc.ReorderItems(1, 1, []uint{})
+	assert.EqualError(t, err, "lista de ids vazia")
+}
+
+func TestTaskListService_ChangeStatus_PersonalOwner(t *testing.T) {
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, Status: models.StatusEmAndamento}, nil
+		},
+		updateFunc: func(list *models.TaskList) error { return nil },
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+	require.NoError(t, svc.ChangeStatus(1, 1, models.StatusAprovado))
+}
+
+func TestTaskListService_ChangeStatus_AccessDenied(t *testing.T) {
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, Status: models.StatusEmAndamento}, nil
+		},
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+	err := svc.ChangeStatus(1, 9, models.StatusAprovado)
+	assert.EqualError(t, err, "lista não encontrada")
+}
+
+func TestTaskListService_CreateList_WithWorkspace(t *testing.T) {
+	wsID := uint(10)
+	store := &mockTaskListStore{
+		nextPositionFunc: func(userID uint) (int, error) { return 1, nil },
+		createFunc:       func(list *models.TaskList) error { list.ID = 8; return nil },
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner},
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, ws)
+	list, err := svc.CreateList(1, "Gol")
+	require.NoError(t, err)
+	require.NotNil(t, list.WorkspaceID)
+	assert.Equal(t, wsID, *list.WorkspaceID)
+}
+
+func TestTaskListService_UpdateItem_EmptyText(t *testing.T) {
+	svc := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, nil)
+	_, err := svc.UpdateItem(1, 1, 1, "", false)
+	assert.EqualError(t, err, "texto do item é obrigatório")
+}
+
+func TestIsValidTransition_EditorFromWaitingStates(t *testing.T) {
+	assert.True(t, isValidTransition(models.RoleEditor, models.StatusAguardandoOrcamento, models.StatusEmAndamento))
+	assert.True(t, isValidTransition(models.RoleEditor, models.StatusAguardandoPeca, models.StatusEmAndamento))
+	assert.False(t, isValidTransition(models.RoleEditor, models.StatusAprovado, models.StatusConcluido))
+	assert.True(t, isValidTransition(models.RoleManager, models.StatusEmAndamento, models.StatusConcluido))
 }
 

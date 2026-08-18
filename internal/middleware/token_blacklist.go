@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 // BlacklistCheck verifica se o token foi revogado (logout anterior).

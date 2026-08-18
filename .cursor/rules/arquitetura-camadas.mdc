@@ -1,0 +1,23 @@
+---
+description: Arquitetura em três camadas Go
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Camadas
+
+handler (HTTP) → service (regra) → repository (GORM)
+
+```go
+// ❌ Handler acessa o banco
+func (h *TaskListHandler) List(c *gin.Context) {
+    h.db.Find(&lists)
+}
+
+// ✅ Handler só chama o service
+result, err := h.listService.ListAll(getUserID(c), filter)
+```
+
+- Service não monta `c.JSON` nem status HTTP.
+- Interfaces no **consumidor** (`TaskListStore` no service), não no repository.
+- Sem lógica nova em `main.go` — só wiring.

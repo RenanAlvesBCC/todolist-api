@@ -3,9 +3,9 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/handlers"
-	"github.com/RenanAlvesBCC/todolist-api/internal/middleware"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/handlers"
+	"github.com/RenanAlvesBCC/oficina-api/internal/middleware"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 func SetupRoutes(
@@ -16,6 +16,7 @@ func SetupRoutes(
 	quoteHandler *handlers.QuoteHandler,
 	flagHandler *handlers.PendingFlagHandler,
 	assignmentHandler *handlers.AssignmentHandler,
+	auditHandler *handlers.AuditHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.CORS())
@@ -48,6 +49,8 @@ func SetupRoutes(
 		protected.POST("/invites/:code/accept", workspaceHandler.AcceptInvite)
 		protected.GET("/workspace/members", workspaceHandler.ListMembers)
 		protected.DELETE("/workspace/members/:userId", workspaceHandler.RemoveMember)
+
+		protected.GET("/audit", auditHandler.List)
 
 		// Listas e itens
 		protected.GET("/lists", listHandler.List)

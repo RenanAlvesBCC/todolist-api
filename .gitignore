@@ -1,0 +1,4 @@
+.DS_Store
+app.db
+*.db
+coverage.out

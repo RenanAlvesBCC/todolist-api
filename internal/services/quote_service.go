@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type QuoteStore interface {
@@ -67,18 +67,7 @@ func (s *QuoteService) DeleteQuote(listID, quoteID, userID uint) error {
 func (s *QuoteService) checkListAccess(listID, userID uint) error {
 	list, err := s.listRepo.FindByID(listID)
 	if err != nil {
-		return errors.New("lista não encontrada")
+		return ErrNotFound
 	}
-
-	if list.UserID == userID {
-		return nil
-	}
-
-	if list.WorkspaceID != nil && s.wsStore != nil {
-		if ok, _ := s.wsStore.IsMember(*list.WorkspaceID, userID); ok {
-			return nil
-		}
-	}
-
-	return errors.New("lista não encontrada")
+	return checkVehicleAccess(list, userID, s.wsStore)
 }
