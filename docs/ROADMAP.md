@@ -11,7 +11,10 @@ Visão compartilhada dos quatro repositórios.
 - [x] Fase 4 — scaffold Android (Compose)
 - [x] Fase 5 — web com role real, convite público, copy de gerente
 - [x] Identidade local — bundle/applicationId, display name, `package.json`, pastas `oficina-api` e `oficina-gerente-web`
-- [ ] Fase 1 (GitHub) — `gh auth login` e rename dos remotes: `oficina-api`, `oficina-gerente-web`, `oficina-mecanico-ios`; criar `oficina-mecanico-android`. Pasta local `todolist-ios` → `oficina-mecanico-ios` (ver `docs/RENOMEAR-GITHUB.md`)
+- [ ] Fase 1 (GitHub) — `gh auth login` e rename dos remotes: `oficina-api`, `oficina-gerente-web`, `oficina-mecanico-ios`. Pasta local `todolist-ios` → `oficina-mecanico-ios` (ver `docs/RENOMEAR-GITHUB.md`)
+- [x] Android no GitHub como `oficina-mecanico-android`
+- [x] CI `verify.sh` nos quatro repos
+- [x] Polish qualidade (cobertura ≥ 90% no escopo) + paridade UX desteira
 
 ## Backlog
 

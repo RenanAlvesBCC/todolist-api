@@ -20,6 +20,10 @@ func main() {
 		log.Println("Aviso: arquivo .env não encontrado")
 	}
 
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET não configurado")
+	}
+
 	database.Connect()
 
 	// Repositories

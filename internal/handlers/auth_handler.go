@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,9 +12,19 @@ import (
 	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
+type AuthRegistrar interface {
+	Register(username, password string) error
+	Login(username, password string) (string, error)
+}
+
+type TokenAuditor interface {
+	LogAction(userID *uint, action, ip, userAgent, details string, success bool)
+	BlacklistToken(token string, expiresAt time.Time) error
+}
+
 type AuthHandler struct {
-	authService  *services.AuthService
-	securityRepo *repository.SecurityRepository
+	authService  AuthRegistrar
+	securityRepo TokenAuditor
 }
 
 func NewAuthHandler(authService *services.AuthService, securityRepo *repository.SecurityRepository) *AuthHandler {
@@ -91,5 +102,5 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	userID := uint(c.MustGet("user_id").(float64))
 	h.securityRepo.LogAction(&userID, "logout", c.ClientIP(), c.GetHeader("User-Agent"), "", true)
 
-	c.JSON(http.StatusOK, gin.H{"message": "logout realizado com sucesso"})
+	c.Status(http.StatusNoContent)
 }

@@ -1,6 +1,8 @@
 # Renomear no GitHub
 
-O CLI `gh` não estava autenticado neste ambiente. Depois de `gh auth login`:
+O app Android já está em `RenanAlvesBCC/oficina-mecanico-android`.
+
+`gh` precisa estar autenticado (`gh auth login`) para os renames restantes:
 
 ```bash
 gh repo rename oficina-api --yes --repo RenanAlvesBCC/todolist-api
@@ -11,7 +13,6 @@ cd ~/Documents/projetos/oficina-api && git remote set-url origin git@github.com:
 cd ~/Documents/projetos/oficina-gerente-web && git remote set-url origin git@github.com:RenanAlvesBCC/oficina-gerente-web.git
 cd ~/Documents/projetos/todolist-ios && git remote set-url origin git@github.com:RenanAlvesBCC/oficina-mecanico-ios.git
 mv ~/Documents/projetos/todolist-ios ~/Documents/projetos/oficina-mecanico-ios
-
-cd ~/Documents/projetos/oficina-mecanico-android
-gh repo create RenanAlvesBCC/oficina-mecanico-android --private --source=. --remote=origin --push
 ```
+
+Identidade visível (bundle, display name, strings da UI) já usa Oficina. O scheme/target `TodoList` no Xcode pode mudar depois do rename remoto.

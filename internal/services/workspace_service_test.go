@@ -241,3 +241,144 @@ func TestWorkspaceService_RemoveMember_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, store.members, 1)
 }
+
+func TestWorkspaceService_GetMyWorkspaceAndRole(t *testing.T) {
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, Name: "Oficina", OwnerID: 1},
+		members:   []models.WorkspaceMember{{WorkspaceID: 1, UserID: 2, Role: models.RoleEditor}},
+	}
+	svc := NewWorkspaceService(store)
+
+	ws, err := svc.GetMyWorkspace(2)
+	require.NoError(t, err)
+	assert.Equal(t, "Oficina", ws.Name)
+
+	role, err := svc.GetMyRole(2)
+	require.NoError(t, err)
+	assert.Equal(t, models.RoleEditor, role)
+
+	_, err = svc.GetMyWorkspace(99)
+	assert.EqualError(t, err, "workspace não encontrado")
+	_, err = svc.GetMyRole(99)
+	assert.EqualError(t, err, "workspace não encontrado")
+}
+
+func TestWorkspaceService_UpdateWorkspace(t *testing.T) {
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, Name: "Velha", OwnerID: 1},
+	}
+	svc := NewWorkspaceService(store)
+
+	ws, err := svc.UpdateWorkspace(1, "Nova", "desc")
+	require.NoError(t, err)
+	assert.Equal(t, "Nova", ws.Name)
+
+	_, err = svc.UpdateWorkspace(1, "", "")
+	assert.EqualError(t, err, "nome é obrigatório")
+
+	_, err = svc.UpdateWorkspace(99, "x", "")
+	assert.EqualError(t, err, "workspace não encontrado")
+}
+
+func TestWorkspaceService_ListMembersAndInvites(t *testing.T) {
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
+		members:   []models.WorkspaceMember{{WorkspaceID: 1, UserID: 1, Role: models.RoleOwner}},
+		invites:   []models.WorkspaceInvite{{Code: "abc"}},
+	}
+	svc := NewWorkspaceService(store)
+
+	members, err := svc.ListMembers(1)
+	require.NoError(t, err)
+	assert.Len(t, members, 1)
+
+	_, err = svc.ListMembers(99)
+	assert.EqualError(t, err, "workspace não encontrado")
+
+	invites, err := svc.ListInvites(1)
+	require.NoError(t, err)
+	assert.Len(t, invites, 1)
+
+	_, err = svc.ListInvites(99)
+	assert.EqualError(t, err, "apenas o dono pode ver os convites")
+}
+
+func TestWorkspaceService_GetInvitePreview(t *testing.T) {
+	expires := time.Now().Add(time.Hour)
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, Name: "Oficina"},
+		invites: []models.WorkspaceInvite{{
+			WorkspaceID: 1, Code: "ok", Role: models.RoleEditor, ExpiresAt: expires,
+		}},
+	}
+	svc := NewWorkspaceService(store)
+
+	invite, ws, err := svc.GetInvitePreview("ok")
+	require.NoError(t, err)
+	assert.Equal(t, "Oficina", ws.Name)
+	assert.Equal(t, models.RoleEditor, invite.Role)
+
+	_, _, err = svc.GetInvitePreview("missing")
+	assert.EqualError(t, err, "convite não encontrado")
+}
+
+func TestWorkspaceService_GetInvitePreview_UsedAndExpired(t *testing.T) {
+	used := time.Now()
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}},
+		invites: []models.WorkspaceInvite{
+			{Code: "used", UsedAt: &used, ExpiresAt: time.Now().Add(time.Hour)},
+			{Code: "expired", ExpiresAt: time.Now().Add(-time.Hour)},
+		},
+	}
+	svc := NewWorkspaceService(store)
+
+	_, _, err := svc.GetInvitePreview("used")
+	assert.EqualError(t, err, "convite já foi utilizado")
+	_, _, err = svc.GetInvitePreview("expired")
+	assert.EqualError(t, err, "convite expirado")
+}
+
+func TestWorkspaceService_AcceptInvite_AlreadyMemberAndUsed(t *testing.T) {
+	used := time.Now()
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
+		members:   []models.WorkspaceMember{{WorkspaceID: 1, UserID: 2, Role: models.RoleEditor}},
+		invites: []models.WorkspaceInvite{
+			{WorkspaceID: 1, Code: "dup", Role: models.RoleEditor, ExpiresAt: time.Now().Add(time.Hour)},
+			{Code: "used", UsedAt: &used, ExpiresAt: time.Now().Add(time.Hour)},
+		},
+	}
+	svc := NewWorkspaceService(store)
+
+	_, err := svc.AcceptInvite(2, "dup")
+	assert.EqualError(t, err, "você já é membro deste workspace")
+	_, err = svc.AcceptInvite(3, "used")
+	assert.EqualError(t, err, "convite já foi utilizado")
+	_, err = svc.AcceptInvite(3, "missing")
+	assert.EqualError(t, err, "convite não encontrado")
+}
+
+func TestWorkspaceService_RemoveMember_NotOwnerAndNotFound(t *testing.T) {
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
+		members:   []models.WorkspaceMember{{WorkspaceID: 1, UserID: 1, Role: models.RoleOwner}},
+	}
+	svc := NewWorkspaceService(store)
+
+	err := svc.RemoveMember(99, 2)
+	assert.EqualError(t, err, "apenas o dono pode remover membros")
+	err = svc.RemoveMember(1, 2)
+	assert.EqualError(t, err, "membro não encontrado")
+}
+
+func TestWorkspaceService_UpdateLastSeen(t *testing.T) {
+	store := &mockWorkspaceStore{
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
+		members:   []models.WorkspaceMember{{WorkspaceID: 1, UserID: 1, Role: models.RoleOwner}},
+	}
+	svc := NewWorkspaceService(store)
+	svc.UpdateLastSeen(1)
+	svc.UpdateLastSeen(99)
+	time.Sleep(20 * time.Millisecond)
+}

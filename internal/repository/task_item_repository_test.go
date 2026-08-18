@@ -64,3 +64,32 @@ func TestTaskItemRepository_UpdatePositions_ReordersItems(t *testing.T) {
 	assert.Equal(t, "Pão", found.Items[0].Text)
 	assert.Equal(t, "Leite", found.Items[1].Text)
 }
+
+func TestTaskItemRepository_UpdateDeleteAndNextPosition(t *testing.T) {
+	db := setupTestDB(t)
+	listRepo := NewTaskListRepository(db)
+	itemRepo := NewTaskItemRepository(db)
+
+	list := &models.TaskList{Title: "Compras", UserID: 1}
+	require.NoError(t, listRepo.Create(list))
+
+	item := &models.TaskItem{Text: "Leite", TaskListID: list.ID}
+	require.NoError(t, itemRepo.Create(item))
+
+	item.Text = "Leite desnatado"
+	item.Completed = true
+	require.NoError(t, itemRepo.Update(item))
+
+	found, err := itemRepo.FindByIDAndList(item.ID, list.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Leite desnatado", found.Text)
+	assert.True(t, found.Completed)
+
+	pos, err := itemRepo.NextPosition(list.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, pos)
+
+	require.NoError(t, itemRepo.Delete(item))
+	_, err = itemRepo.FindByIDAndList(item.ID, list.ID)
+	assert.Error(t, err)
+}
