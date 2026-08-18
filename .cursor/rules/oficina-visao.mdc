@@ -1,0 +1,12 @@
+---
+description: Visão de produto — papéis gerente vs mecânico
+alwaysApply: true
+---
+
+# Visão da oficina
+
+- Gerente/dono: web — pátio inteiro, criar veículo, atribuir mecânicos.
+- Mecânico (`editor`): app — só veículos atribuídos.
+- `owner` = dono, `manager` = gerente, `editor` = mecânico.
+
+Toda regra de autorização vive no **service**, não no handler.

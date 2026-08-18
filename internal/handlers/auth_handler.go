@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
-	"github.com/RenanAlvesBCC/todolist-api/internal/services"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/services"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 type AuthHandler struct {

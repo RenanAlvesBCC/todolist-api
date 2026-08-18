@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 // ---- mocks ----
@@ -182,8 +182,8 @@ func TestTaskListService_DeleteList_RemovesItemsBeforeList(t *testing.T) {
 	var deletedList bool
 
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
-			return &models.TaskList{Base: models.Base{ID: id}, UserID: userID}, nil
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
 		},
 		deleteFunc: func(list *models.TaskList) error {
 			deletedList = true
@@ -205,7 +205,7 @@ func TestTaskListService_DeleteList_RemovesItemsBeforeList(t *testing.T) {
 
 func TestTaskListService_DeleteList_NotFoundReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return nil, errors.New("record not found")
 		},
 	}
@@ -276,7 +276,7 @@ func TestTaskListService_ReorderLists_EmptyIDsReturnsError(t *testing.T) {
 
 func TestTaskListService_ReorderItems_ListNotOwnedReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
-		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return nil, errors.New("record not found")
 		},
 	}
@@ -297,6 +297,7 @@ func TestTaskListService_ChangeStatus_EditorValidTransition(t *testing.T) {
 				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
+				Assignments: []models.ListAssignment{{UserID: 5}},
 			}, nil
 		},
 		updateFunc: func(list *models.TaskList) error { return nil },
@@ -320,6 +321,7 @@ func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
 				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
+				Assignments: []models.ListAssignment{{UserID: 5}},
 			}, nil
 		},
 	}
@@ -355,5 +357,63 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 	err := service.ChangeStatus(1, 1, models.StatusAprovado)
 
 	require.NoError(t, err)
+}
+
+func TestTaskListService_CreateList_EditorForbidden(t *testing.T) {
+	wsID := uint(10)
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, ws)
+
+	_, err := service.CreateList(5, "Gol 2012")
+
+	assert.ErrorIs(t, err, ErrNotManager)
+}
+
+func TestTaskListService_ListAll_EditorSetsAssignedFilter(t *testing.T) {
+	wsID := uint(10)
+	var got repository.TaskListFilter
+	store := &mockTaskListStore{
+		findAllFunc: func(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error) {
+			got = filter
+			return nil, 0, nil
+		},
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
+
+	_, err := service.ListAll(5, "", 1, 20, "em_andamento", false)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.AssignedToID)
+	assert.Equal(t, uint(5), *got.AssignedToID)
+	assert.Equal(t, "em_andamento", got.Status)
+}
+
+func TestTaskListService_GetList_EditorNotAssignedReturnsNotFound(t *testing.T) {
+	wsID := uint(10)
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{
+				Base:        models.Base{ID: id},
+				WorkspaceID: &wsID,
+				Assignments: []models.ListAssignment{{UserID: 99}},
+			}, nil
+		},
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
+
+	_, err := service.GetList(1, 5)
+
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 

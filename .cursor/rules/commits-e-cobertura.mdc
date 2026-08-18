@@ -1,0 +1,31 @@
+---
+description: Commits pequenos com build, testes e cobertura ≥90%
+alwaysApply: true
+---
+
+# Commits incrementais e qualidade
+
+## Tamanho do commit
+
+- **Um commit = uma mudança lógica** (handler, service, migration, fix de teste).
+- Evite commits que misturam feature + rename + refactor amplo.
+
+## Gate obrigatório antes de commit
+
+Rode `./scripts/verify.sh` e só commite se passar:
+
+1. **`go build`** sem erro.
+2. **`go test`** nos pacotes do escopo passa.
+3. **Cobertura ≥ 90%** no escopo de `docs/QUALIDADE.md`.
+
+## Cobertura
+
+- Escopo: `internal/services`, `internal/handlers`, `internal/repository`.
+- Excluídos: `main.go`, `routes`, `database`, `middleware`, `models`, `utils` (infra).
+- Handler/service novo exige `*_test.go` no mesmo commit.
+
+## Fluxo
+
+```
+implementar → ./scripts/verify.sh → commit pequeno → repetir
+```

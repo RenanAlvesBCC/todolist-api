@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type WorkspaceStore interface {
@@ -70,6 +70,18 @@ func (s *WorkspaceService) GetMyWorkspace(userID uint) (*models.Workspace, error
 		return nil, errors.New("workspace não encontrado")
 	}
 	return ws, nil
+}
+
+func (s *WorkspaceService) GetMyRole(userID uint) (models.WorkspaceRole, error) {
+	ws, err := s.repo.FindByMemberUserID(userID)
+	if err != nil {
+		return "", errors.New("workspace não encontrado")
+	}
+	role, err := s.repo.GetMemberRole(ws.ID, userID)
+	if err != nil {
+		return "", errors.New("workspace não encontrado")
+	}
+	return role, nil
 }
 
 func (s *WorkspaceService) UpdateWorkspace(ownerID uint, name, description string) (*models.Workspace, error) {

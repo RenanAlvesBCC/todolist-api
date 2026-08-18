@@ -7,12 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/database"
-	"github.com/RenanAlvesBCC/todolist-api/internal/handlers"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
-	"github.com/RenanAlvesBCC/todolist-api/internal/routes"
-	"github.com/RenanAlvesBCC/todolist-api/internal/services"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/database"
+	"github.com/RenanAlvesBCC/oficina-api/internal/handlers"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/routes"
+	"github.com/RenanAlvesBCC/oficina-api/internal/services"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 func main() {
@@ -42,6 +42,7 @@ func main() {
 	quoteService := services.NewQuoteService(quoteRepo, listRepo, wsRepo)
 	flagService := services.NewPendingFlagService(flagRepo, listRepo, wsRepo)
 	assignService := services.NewAssignmentService(assignRepo, wsRepo, listRepo)
+	auditService := services.NewAuditService(secRepo, wsRepo)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, secRepo)
@@ -50,9 +51,10 @@ func main() {
 	quoteHandler := handlers.NewQuoteHandler(quoteService)
 	flagHandler := handlers.NewPendingFlagHandler(flagService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignService)
+	auditHandler := handlers.NewAuditHandler(auditService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, secRepo)
+	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, secRepo)
 
 	port := os.Getenv("PORT")
 	if port == "" {

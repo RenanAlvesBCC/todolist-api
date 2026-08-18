@@ -1,4 +1,4 @@
-module github.com/RenanAlvesBCC/todolist-api
+module github.com/RenanAlvesBCC/oficina-api
 
 go 1.26.4
 

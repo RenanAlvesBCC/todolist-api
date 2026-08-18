@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/services"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/services"
 )
 
 type mockTaskListProvider struct {
 	createListFunc   func(userID uint, title string) (*models.TaskList, error)
-	listAllFunc      func(userID uint, search string, page, limit int) (*services.PaginatedTaskLists, error)
+	listAllFunc      func(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error)
 	getListFunc      func(listID, userID uint) (*models.TaskList, error)
 	updateListFunc   func(listID, userID uint, title string) (*models.TaskList, error)
 	deleteListFunc   func(listID, userID uint) error
@@ -34,8 +34,11 @@ type mockTaskListProvider struct {
 func (m *mockTaskListProvider) CreateList(userID uint, title string) (*models.TaskList, error) {
 	return m.createListFunc(userID, title)
 }
-func (m *mockTaskListProvider) ListAll(userID uint, search string, page, limit int) (*services.PaginatedTaskLists, error) {
-	return m.listAllFunc(userID, search, page, limit)
+func (m *mockTaskListProvider) ListAll(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error) {
+	if m.listAllFunc == nil {
+		return &services.PaginatedTaskLists{}, nil
+	}
+	return m.listAllFunc(userID, search, page, limit, status, mine)
 }
 func (m *mockTaskListProvider) GetList(listID, userID uint) (*models.TaskList, error) {
 	return m.getListFunc(listID, userID)

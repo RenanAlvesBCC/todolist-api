@@ -1,0 +1,12 @@
+---
+description: Boas práticas Go da API
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Go
+
+- Erros de negócio em português, devolvidos com `utils.RespondError`.
+- Rotas `/api` exigem JWT + blacklist.
+- Testes de service/handler no mesmo pacote (`*_test.go`).
+- Não logue tokens. Não coloque JWT_SECRET no código.

@@ -5,9 +5,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 // AuthService contém a regra de negócio de autenticação: nem sabe que existe HTTP,

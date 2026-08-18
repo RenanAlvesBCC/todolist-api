@@ -1,0 +1,20 @@
+---
+description: Padrões de autorização da oficina
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Autorização
+
+- `editor`: listar só veículos atribuídos; status só nas transições já definidas; itens/quotes/flags do veículo da esteira.
+- `owner`/`manager`: pátio inteiro; create/delete/reorder de veículos; assign/unassign.
+
+```go
+// ❌ Editor cria veículo
+if err := s.listRepo.Create(list); err != nil { ... }
+
+// ✅ Exigir gerente antes de mutar o pátio
+if err := s.requireManager(userID); err != nil {
+    return nil, err
+}
+```

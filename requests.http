@@ -1,13 +1,13 @@
-@baseUrl = http://localhost:8080
-# Produção: https://todolist-api-tq9d.onrender.com
-@owner = owner.local
-@mechanic = mechanic.local
-@password = ChangeMe123!
+@baseUrl = https://todolist-api-tq9d.onrender.com
+# Local: http://localhost:8080
+@owner = gerente@teste.com
+@mechanic = mecanico@teste.com
+@password = abcd@1234
 
 ### Health
 GET {{baseUrl}}/
 
-###
+### Registrar owner
 # @name registerOwner
 POST {{baseUrl}}/register
 Content-Type: application/json
@@ -17,7 +17,7 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-###
+### Login owner
 # @name loginOwner
 POST {{baseUrl}}/login
 Content-Type: application/json
@@ -27,7 +27,7 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-###
+### Registrar mecanico
 # @name registerMechanic
 POST {{baseUrl}}/register
 Content-Type: application/json
@@ -37,7 +37,7 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-###
+### Login mecanico
 # @name loginMechanic
 POST {{baseUrl}}/login
 Content-Type: application/json
@@ -47,7 +47,7 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-### Login inválido (401)
+### Login invalido
 POST {{baseUrl}}/login
 Content-Type: application/json
 
@@ -56,21 +56,21 @@ Content-Type: application/json
   "password": "senha-errada"
 }
 
-### Rota protegida sem token (401)
+### Listas sem token
 GET {{baseUrl}}/api/lists
 
-###
+### Criar workspace
 # @name createWorkspace
 POST {{baseUrl}}/api/workspace
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "name": "Oficina do João",
-  "description": "Gestão de veículos"
+  "name": "RMAXX Auto",
+  "description": "Gestao de veiculos"
 }
 
-### Workspace duplicado (400)
+### Workspace duplicado
 POST {{baseUrl}}/api/workspace
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
@@ -79,21 +79,21 @@ Content-Type: application/json
   "name": "Outra oficina"
 }
 
-###
+### Buscar workspace
 GET {{baseUrl}}/api/workspace
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Atualizar workspace
 PUT {{baseUrl}}/api/workspace
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "name": "Oficina do João",
+  "name": "RMAXX Auto",
   "description": "Atualizado"
 }
 
-###
+### Gerar convite
 # @name createInvite
 POST {{baseUrl}}/api/workspace/invites
 Authorization: Bearer {{loginOwner.response.body.token}}
@@ -103,63 +103,63 @@ Content-Type: application/json
   "role": "editor"
 }
 
-###
+### Listar convites
 GET {{baseUrl}}/api/workspace/invites
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-### Preview do convite (público)
+### Preview do convite
 GET {{baseUrl}}/invites/{{createInvite.response.body.code}}/preview
 
-### Mecânico aceita o convite
+### Aceitar convite
 POST {{baseUrl}}/api/invites/{{createInvite.response.body.code}}/accept
 Authorization: Bearer {{loginMechanic.response.body.token}}
 
-###
+### Listar membros
 GET {{baseUrl}}/api/workspace/members
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Criar veiculo
 # @name createList
 POST {{baseUrl}}/api/lists
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Fusca 1972 — ABC-1234"
+  "title": "Fusca 1972 ABC-1234"
 }
 
-###
+### Criar segundo veiculo
 # @name createList2
 POST {{baseUrl}}/api/lists
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Gol 2010 — XYZ-9876"
+  "title": "Gol 2010 XYZ-9876"
 }
 
-###
+### Listar veiculos
 GET {{baseUrl}}/api/lists?page=1&limit=20
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Buscar veiculos
 GET {{baseUrl}}/api/lists?search=Fusca
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Buscar veiculo por id
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Atualizar titulo do veiculo
 PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Fusca 1972 — ABC-1234 (revisão)"
+  "title": "Fusca 1972 ABC-1234 revisao"
 }
 
-### Reordenar listas
+### Reordenar veiculos
 PUT {{baseUrl}}/api/lists/reorder
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
@@ -168,17 +168,17 @@ Content-Type: application/json
   "ids": [{{createList2.response.body.id}}, {{createList.response.body.id}}]
 }
 
-###
+### Adicionar item
 # @name addItem
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "text": "Troca de óleo"
+  "text": "Troca de oleo"
 }
 
-###
+### Adicionar segundo item
 # @name addItem2
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
 Authorization: Bearer {{loginOwner.response.body.token}}
@@ -188,13 +188,13 @@ Content-Type: application/json
   "text": "Pastilha de freio"
 }
 
-###
+### Atualizar item
 PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "text": "Troca de óleo",
+  "text": "Troca de oleo",
   "completed": true
 }
 
@@ -207,7 +207,7 @@ Content-Type: application/json
   "ids": [{{addItem2.response.body.id}}, {{addItem.response.body.id}}]
 }
 
-### Status — owner pode qualquer transição
+### Alterar status
 PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/status
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
@@ -216,7 +216,7 @@ Content-Type: application/json
   "status": "aguardando_orcamento"
 }
 
-###
+### Adicionar orcamento
 # @name addQuote
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
 Authorization: Bearer {{loginOwner.response.body.token}}
@@ -226,11 +226,11 @@ Content-Type: application/json
   "text": "Pastilha de freio R$120"
 }
 
-###
+### Listar orcamentos
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Adicionar pendencia
 # @name addFlag
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
 Authorization: Bearer {{loginOwner.response.body.token}}
@@ -241,7 +241,7 @@ Content-Type: application/json
   "note": ""
 }
 
-### Flag tipo outro exige nota com 10+ caracteres
+### Pendencia outro com nota curta
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
@@ -251,15 +251,15 @@ Content-Type: application/json
   "note": "curto"
 }
 
-###
+### Listar pendencias
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Resolver pendencia
 PATCH {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags/{{addFlag.response.body.id}}/resolve
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-### Atribuir mecânico (user_id do mechanic após aceitar convite)
+### Atribuir mecanico
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
@@ -268,22 +268,38 @@ Content-Type: application/json
   "user_id": 2
 }
 
-###
+### Listar atribuicoes
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Remover orcamento
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes/{{addQuote.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Remover item
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem2.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-###
+### Excluir veiculo
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
 ### Logout
 POST {{baseUrl}}/api/logout
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Meu workspace (inclui role)
+GET {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Esteira do mecanico
+GET {{baseUrl}}/api/lists?mine=true
+Authorization: Bearer {{loginMechanic.response.body.token}}
+
+### Patio filtrado por status
+GET {{baseUrl}}/api/lists?status=em_andamento
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Auditoria
+GET {{baseUrl}}/api/audit?page=1&limit=20
 Authorization: Bearer {{loginOwner.response.body.token}}

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 )
 
 type AssignmentStore interface {

@@ -1,0 +1,11 @@
+---
+description: Contrato HTTP — lists = veículos até o rename
+alwaysApply: true
+---
+
+# Contrato HTTP
+
+- `/api/lists` = veículos; `items` = serviços. Não renomeie paths neste ciclo.
+- Mudança de contrato: atualizar `docs/CONTRATO-API.md` e os quatro clientes juntos.
+- `GET /api/lists` aceita `search`, `page`, `limit`, `status`, `mine=true`.
+- Editor é filtrado no servidor (só atribuídos), mesmo sem `mine`.

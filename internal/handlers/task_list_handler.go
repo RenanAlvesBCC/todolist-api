@@ -1,21 +1,22 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/services"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/services"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 // TaskListProvider descreve o que o handler precisa do service de listas.
 type TaskListProvider interface {
 	CreateList(userID uint, title string) (*models.TaskList, error)
-	ListAll(userID uint, search string, page, limit int) (*services.PaginatedTaskLists, error)
+	ListAll(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error)
 	GetList(listID, userID uint) (*models.TaskList, error)
 	UpdateList(listID, userID uint, title string) (*models.TaskList, error)
 	DeleteList(listID, userID uint) error
@@ -62,6 +63,10 @@ func (h *TaskListHandler) Create(c *gin.Context) {
 
 	list, err := h.listService.CreateList(getUserID(c), input.Title)
 	if err != nil {
+		if errors.Is(err, services.ErrNotManager) {
+			utils.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -70,10 +75,12 @@ func (h *TaskListHandler) Create(c *gin.Context) {
 
 func (h *TaskListHandler) List(c *gin.Context) {
 	search := c.Query("search")
+	status := c.Query("status")
+	mine := c.Query("mine") == "true"
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	result, err := h.listService.ListAll(getUserID(c), search, page, limit)
+	result, err := h.listService.ListAll(getUserID(c), search, page, limit, status, mine)
 	if err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "erro ao buscar listas")
 		return
@@ -111,6 +118,10 @@ func (h *TaskListHandler) Update(c *gin.Context) {
 
 	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.Title)
 	if err != nil {
+		if errors.Is(err, services.ErrNotManager) {
+			utils.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
@@ -125,6 +136,10 @@ func (h *TaskListHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.listService.DeleteList(uint(id), getUserID(c)); err != nil {
+		if errors.Is(err, services.ErrNotManager) {
+			utils.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
@@ -210,7 +225,11 @@ func (h *TaskListHandler) ReorderLists(c *gin.Context) {
 	}
 
 	if err := h.listService.ReorderLists(getUserID(c), input.IDs); err != nil {
-		log.Printf("ReorderLists bind error: %v", err)
+		log.Printf("ReorderLists error: %v", err)
+		if errors.Is(err, services.ErrNotManager) {
+			utils.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}

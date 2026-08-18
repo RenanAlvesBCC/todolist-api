@@ -6,13 +6,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/RenanAlvesBCC/todolist-api/internal/models"
-	"github.com/RenanAlvesBCC/todolist-api/internal/utils"
+	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/utils"
 )
 
 type WorkspaceProvider interface {
 	CreateWorkspace(ownerID uint, name, description string) (*models.Workspace, error)
 	GetMyWorkspace(userID uint) (*models.Workspace, error)
+	GetMyRole(userID uint) (models.WorkspaceRole, error)
 	UpdateWorkspace(ownerID uint, name, description string) (*models.Workspace, error)
 	GenerateInvite(requesterID uint, role models.WorkspaceRole) (string, error)
 	AcceptInvite(userID uint, code string) (*models.Workspace, error)
@@ -55,12 +56,26 @@ func (h *WorkspaceHandler) Create(c *gin.Context) {
 }
 
 func (h *WorkspaceHandler) Get(c *gin.Context) {
-	ws, err := h.svc.GetMyWorkspace(getUserID(c))
+	userID := getUserID(c)
+	ws, err := h.svc.GetMyWorkspace(userID)
 	if err != nil {
 		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, ws)
+	role, err := h.svc.GetMyRole(userID)
+	if err != nil {
+		utils.RespondError(c, http.StatusNotFound, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":          ws.ID,
+		"name":        ws.Name,
+		"description": ws.Description,
+		"owner_id":    ws.OwnerID,
+		"created_at":  ws.CreatedAt,
+		"updated_at":  ws.UpdatedAt,
+		"role":        role,
+	})
 }
 
 func (h *WorkspaceHandler) Update(c *gin.Context) {
