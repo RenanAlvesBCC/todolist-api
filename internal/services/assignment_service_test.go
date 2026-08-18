@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/models"
 )
@@ -65,14 +64,14 @@ type mockWsStore struct {
 
 func (m *mockWsStore) Create(ws *models.Workspace) error               { return nil }
 func (m *mockWsStore) FindByOwner(ownerID uint) (*models.Workspace, error) {
-	return &models.Workspace{Model: gorm.Model{ID: m.wsID}}, nil
+	return &models.Workspace{Base: models.Base{ID: m.wsID}}, nil
 }
 func (m *mockWsStore) FindByID(id uint) (*models.Workspace, error) {
-	return &models.Workspace{Model: gorm.Model{ID: m.wsID}}, nil
+	return &models.Workspace{Base: models.Base{ID: m.wsID}}, nil
 }
 func (m *mockWsStore) FindByMemberUserID(userID uint) (*models.Workspace, error) {
 	if _, ok := m.members[userID]; ok {
-		return &models.Workspace{Model: gorm.Model{ID: m.wsID}}, nil
+		return &models.Workspace{Base: models.Base{ID: m.wsID}}, nil
 	}
 	return nil, errors.New("not found")
 }

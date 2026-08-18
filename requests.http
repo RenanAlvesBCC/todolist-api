@@ -1,61 +1,289 @@
-GET http://localhost:8080/
+@baseUrl = http://localhost:8080
+# Produção: https://todolist-api-tq9d.onrender.com
+@owner = owner.local
+@mechanic = mechanic.local
+@password = ChangeMe123!
 
-### Registrar usuário
-# POST http://localhost:8080/register
-POST https://todolist-api-tq9d.onrender.com/register
+### Health
+GET {{baseUrl}}/
+
+###
+# @name registerOwner
+POST {{baseUrl}}/register
 Content-Type: application/json
 
 {
-  "username": "renanAlves",
-  "password": "abcd@1234"
+  "username": "{{owner}}",
+  "password": "{{password}}"
 }
 
-### Login
-# POST http://localhost:8080/login
-POST https://todolist-api-tq9d.onrender.com/login
+###
+# @name loginOwner
+POST {{baseUrl}}/login
 Content-Type: application/json
 
 {
-  "username": "RenanAlves",
-  "password": "abcd@1234"
+  "username": "{{owner}}",
+  "password": "{{password}}"
 }
 
-### Perfil sem token (deve dar 401)
-GET http://localhost:8080/api/profile
-
-### Perfil com token (cole o token que veio do login)
-GET http://localhost:8080/api/profile
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE4MzIxMDIsImlhdCI6MTc4MTc0NTcwMiwidXNlcl9pZCI6MSwidXNlcm5hbWUiOiJyZW5hbiJ9.lS0ULfIYNxG9QAagpGjbD3O-n47MukpYflrRxYjQF4s
-
-### Criar tarefa
-POST http://localhost:8080/api/tasks
+###
+# @name registerMechanic
+POST {{baseUrl}}/register
 Content-Type: application/json
-Authorization: Bearer COLE_O_TOKEN_AQUI
 
 {
-  "title": "Estudar Go",
-  "description": "Terminar a fase 5 do projeto"
+  "username": "{{mechanic}}",
+  "password": "{{password}}"
 }
 
-### Listar tarefas
-GET http://localhost:8080/api/tasks
-Authorization: Bearer COLE_O_TOKEN_AQUI
-
-### Buscar uma tarefa específica (troque o 1 pelo id retornado na criação)
-GET http://localhost:8080/api/tasks/1
-Authorization: Bearer COLE_O_TOKEN_AQUI
-
-### Marcar como concluída
-PUT http://localhost:8080/api/tasks/1
+###
+# @name loginMechanic
+POST {{baseUrl}}/login
 Content-Type: application/json
-Authorization: Bearer COLE_O_TOKEN_AQUI
 
 {
-  "title": "Estudar Go",
-  "description": "Terminar a fase 5 do projeto",
+  "username": "{{mechanic}}",
+  "password": "{{password}}"
+}
+
+### Login inválido (401)
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+  "username": "{{owner}}",
+  "password": "senha-errada"
+}
+
+### Rota protegida sem token (401)
+GET {{baseUrl}}/api/lists
+
+###
+# @name createWorkspace
+POST {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Oficina do João",
+  "description": "Gestão de veículos"
+}
+
+### Workspace duplicado (400)
+POST {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Outra oficina"
+}
+
+###
+GET {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+PUT {{baseUrl}}/api/workspace
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Oficina do João",
+  "description": "Atualizado"
+}
+
+###
+# @name createInvite
+POST {{baseUrl}}/api/workspace/invites
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "role": "editor"
+}
+
+###
+GET {{baseUrl}}/api/workspace/invites
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Preview do convite (público)
+GET {{baseUrl}}/invites/{{createInvite.response.body.code}}/preview
+
+### Mecânico aceita o convite
+POST {{baseUrl}}/api/invites/{{createInvite.response.body.code}}/accept
+Authorization: Bearer {{loginMechanic.response.body.token}}
+
+###
+GET {{baseUrl}}/api/workspace/members
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+# @name createList
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 — ABC-1234"
+}
+
+###
+# @name createList2
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Gol 2010 — XYZ-9876"
+}
+
+###
+GET {{baseUrl}}/api/lists?page=1&limit=20
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+GET {{baseUrl}}/api/lists?search=Fusca
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 — ABC-1234 (revisão)"
+}
+
+### Reordenar listas
+PUT {{baseUrl}}/api/lists/reorder
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "ids": [{{createList2.response.body.id}}, {{createList.response.body.id}}]
+}
+
+###
+# @name addItem
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Troca de óleo"
+}
+
+###
+# @name addItem2
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/items
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Pastilha de freio"
+}
+
+###
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Troca de óleo",
   "completed": true
 }
 
-### Excluir tarefa
-DELETE http://localhost:8080/api/tasks/1
-Authorization: Bearer COLE_O_TOKEN_AQUI
+### Reordenar itens
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/reorder
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "ids": [{{addItem2.response.body.id}}, {{addItem.response.body.id}}]
+}
+
+### Status — owner pode qualquer transição
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/status
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "aguardando_orcamento"
+}
+
+###
+# @name addQuote
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Pastilha de freio R$120"
+}
+
+###
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+# @name addFlag
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "flag_type": "aguardando_peca",
+  "note": ""
+}
+
+### Flag tipo outro exige nota com 10+ caracteres
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "flag_type": "outro",
+  "note": "curto"
+}
+
+###
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+PATCH {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags/{{addFlag.response.body.id}}/resolve
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Atribuir mecânico (user_id do mechanic após aceitar convite)
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "user_id": 2
+}
+
+###
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes/{{addQuote.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem2.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+###
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Logout
+POST {{baseUrl}}/api/logout
+Authorization: Bearer {{loginOwner.response.body.token}}

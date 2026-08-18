@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/models"
 )
@@ -129,7 +128,7 @@ func TestWorkspaceService_CreateWorkspace_Success(t *testing.T) {
 }
 
 func TestWorkspaceService_CreateWorkspace_DuplicateReturnsError(t *testing.T) {
-	store := &mockWorkspaceStore{workspace: &models.Workspace{Model: gorm.Model{ID: 1}, Name: "Já existe", OwnerID: 1}}
+	store := &mockWorkspaceStore{workspace: &models.Workspace{Base: models.Base{ID: 1}, Name: "Já existe", OwnerID: 1}}
 	svc := NewWorkspaceService(store)
 
 	_, err := svc.CreateWorkspace(1, "Outra oficina", "")
@@ -147,7 +146,7 @@ func TestWorkspaceService_CreateWorkspace_EmptyNameReturnsError(t *testing.T) {
 }
 
 func TestWorkspaceService_GenerateInvite_OwnerCanInviteEditor(t *testing.T) {
-	store := &mockWorkspaceStore{workspace: &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1}}
+	store := &mockWorkspaceStore{workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1}}
 	svc := NewWorkspaceService(store)
 
 	code, err := svc.GenerateInvite(1, models.RoleEditor)
@@ -158,7 +157,7 @@ func TestWorkspaceService_GenerateInvite_OwnerCanInviteEditor(t *testing.T) {
 }
 
 func TestWorkspaceService_GenerateInvite_CannotInviteAsOwner(t *testing.T) {
-	store := &mockWorkspaceStore{workspace: &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1}}
+	store := &mockWorkspaceStore{workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1}}
 	svc := NewWorkspaceService(store)
 
 	_, err := svc.GenerateInvite(1, models.RoleOwner)
@@ -168,7 +167,7 @@ func TestWorkspaceService_GenerateInvite_CannotInviteAsOwner(t *testing.T) {
 
 func TestWorkspaceService_GenerateInvite_NonOwnerCannotInvite(t *testing.T) {
 	store := &mockWorkspaceStore{
-		workspace: &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1},
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
 	}
 	svc := NewWorkspaceService(store)
 
@@ -179,7 +178,7 @@ func TestWorkspaceService_GenerateInvite_NonOwnerCannotInvite(t *testing.T) {
 }
 
 func TestWorkspaceService_AcceptInvite_Success(t *testing.T) {
-	ws := &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1}
+	ws := &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1}
 	code := "valid-code"
 	expires := time.Now().Add(time.Hour)
 	store := &mockWorkspaceStore{
@@ -201,7 +200,7 @@ func TestWorkspaceService_AcceptInvite_Success(t *testing.T) {
 
 func TestWorkspaceService_AcceptInvite_ExpiredReturnsError(t *testing.T) {
 	store := &mockWorkspaceStore{
-		workspace: &models.Workspace{Model: gorm.Model{ID: 1}},
+		workspace: &models.Workspace{Base: models.Base{ID: 1}},
 		invites: []models.WorkspaceInvite{{
 			Code: "expired", ExpiresAt: time.Now().Add(-time.Hour),
 		}},
@@ -215,7 +214,7 @@ func TestWorkspaceService_AcceptInvite_ExpiredReturnsError(t *testing.T) {
 
 func TestWorkspaceService_RemoveMember_OwnerCannotBeRemoved(t *testing.T) {
 	store := &mockWorkspaceStore{
-		workspace: &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1},
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
 		members: []models.WorkspaceMember{
 			{WorkspaceID: 1, UserID: 1, Role: models.RoleOwner},
 		},
@@ -229,7 +228,7 @@ func TestWorkspaceService_RemoveMember_OwnerCannotBeRemoved(t *testing.T) {
 
 func TestWorkspaceService_RemoveMember_Success(t *testing.T) {
 	store := &mockWorkspaceStore{
-		workspace: &models.Workspace{Model: gorm.Model{ID: 1}, OwnerID: 1},
+		workspace: &models.Workspace{Base: models.Base{ID: 1}, OwnerID: 1},
 		members: []models.WorkspaceMember{
 			{WorkspaceID: 1, UserID: 1, Role: models.RoleOwner},
 			{WorkspaceID: 1, UserID: 2, Role: models.RoleEditor},

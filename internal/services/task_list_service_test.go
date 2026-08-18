@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/models"
 	"github.com/RenanAlvesBCC/todolist-api/internal/repository"
@@ -184,7 +183,7 @@ func TestTaskListService_DeleteList_RemovesItemsBeforeList(t *testing.T) {
 
 	store := &mockTaskListStore{
 		findByIDAndUserFunc: func(id, userID uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: userID}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: userID}, nil
 		},
 		deleteFunc: func(list *models.TaskList) error {
 			deletedList = true
@@ -220,12 +219,12 @@ func TestTaskListService_DeleteList_NotFoundReturnsError(t *testing.T) {
 func TestTaskListService_UpdateItem_Success(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: 1}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1}, nil
 		},
 	}
 	itemStore := &mockTaskItemStore{
 		findByIDAndListFunc: func(id, taskListID uint) (*models.TaskItem, error) {
-			return &models.TaskItem{Model: gorm.Model{ID: id}, TaskListID: taskListID}, nil
+			return &models.TaskItem{Base: models.Base{ID: id}, TaskListID: taskListID}, nil
 		},
 		updateFunc: func(item *models.TaskItem) error { return nil },
 	}
@@ -241,7 +240,7 @@ func TestTaskListService_UpdateItem_Success(t *testing.T) {
 func TestTaskListService_UpdateItem_ListNotOwnedByUserReturnsError(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: 2}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 2}, nil
 		},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
@@ -295,7 +294,7 @@ func TestTaskListService_ChangeStatus_EditorValidTransition(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
 			}, nil
@@ -303,7 +302,7 @@ func TestTaskListService_ChangeStatus_EditorValidTransition(t *testing.T) {
 		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
@@ -318,14 +317,14 @@ func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusEmAndamento,
 			}, nil
 		},
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{5: models.RoleEditor},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
@@ -340,7 +339,7 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
 			return &models.TaskList{
-				Model:       gorm.Model{ID: id},
+				Base:        models.Base{ID: id},
 				WorkspaceID: &wsID,
 				Status:      models.StatusAguardandoOrcamento,
 			}, nil
@@ -348,7 +347,7 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	ws := &mockWsCtxStore{
-		workspace:  &models.Workspace{Model: gorm.Model{ID: wsID}},
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
 		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner},
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)

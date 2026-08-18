@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/todolist-api/internal/models"
 )
@@ -41,7 +40,7 @@ func (m *mockFlagStore) Update(f *models.PendingFlag) error {
 func flagListStore(userID uint) *mockTaskListStore {
 	return &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
-			return &models.TaskList{Model: gorm.Model{ID: id}, UserID: userID}, nil
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: userID}, nil
 		},
 	}
 }
