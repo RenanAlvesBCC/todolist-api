@@ -209,3 +209,23 @@ func TestTaskListRepository_FindAll_WorkspaceStatusAndAssigned(t *testing.T) {
 	require.Len(t, mine, 1)
 	assert.Equal(t, "Gol", mine[0].Title)
 }
+
+func TestTaskListRepository_FindAll_AssignedIncludesLegacyNilWorkspace(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTaskListRepository(db)
+	assignRepo := NewListAssignmentRepository(db)
+
+	wsID := uint(10)
+	legacy := &models.TaskList{Title: "Fiesta legado", UserID: 1, WorkspaceID: nil, Status: models.StatusEmAndamento}
+	require.NoError(t, repo.Create(legacy))
+	require.NoError(t, assignRepo.Assign(&models.ListAssignment{
+		TaskListID: legacy.ID, UserID: 5, AssignedBy: 1, AssignedAt: time.Now(),
+	}))
+
+	assignedTo := uint(5)
+	mine, total, err := repo.FindAll(5, &wsID, TaskListFilter{AssignedToID: &assignedTo, Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, mine, 1)
+	assert.Equal(t, "Fiesta legado", mine[0].Title)
+}

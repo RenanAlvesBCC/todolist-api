@@ -53,7 +53,21 @@ func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter Task
 
 func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter TaskListFilter) *gorm.DB {
 	var query *gorm.DB
-	if workspaceID != nil {
+
+	// Esteira (AssignedToID): veículo atribuído no workspace atual, ou legado sem workspace_id.
+	if filter.AssignedToID != nil {
+		sub := r.db.Model(&models.ListAssignment{}).
+			Select("task_list_id").
+			Where("user_id = ?", *filter.AssignedToID)
+		if workspaceID != nil {
+			query = r.db.Model(&models.TaskList{}).Where(
+				"id IN (?) AND (workspace_id = ? OR workspace_id IS NULL)",
+				sub, *workspaceID,
+			)
+		} else {
+			query = r.db.Model(&models.TaskList{}).Where("id IN (?)", sub)
+		}
+	} else if workspaceID != nil {
 		query = r.db.Model(&models.TaskList{}).Where(
 			"(workspace_id = ?) OR (user_id = ? AND workspace_id IS NULL)",
 			*workspaceID, userID,
@@ -61,18 +75,13 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 	} else {
 		query = r.db.Model(&models.TaskList{}).Where("user_id = ? AND workspace_id IS NULL", userID)
 	}
+
 	if filter.Search != "" {
 		like := "%" + filter.Search + "%"
 		query = query.Where("title LIKE ? OR plate LIKE ? OR customer LIKE ?", like, like, like)
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
-	}
-	if filter.AssignedToID != nil {
-		sub := r.db.Model(&models.ListAssignment{}).
-			Select("task_list_id").
-			Where("user_id = ?", *filter.AssignedToID)
-		query = query.Where("id IN (?)", sub)
 	}
 	return query
 }

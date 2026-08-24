@@ -104,7 +104,13 @@ func (m *mockWsStore) GetMemberRole(wsID, userID uint) (models.WorkspaceRole, er
 
 func newAssignSvc(store *mockAssignmentStore, members map[uint]models.WorkspaceRole) *AssignmentService {
 	ws := &mockWsStore{wsID: 10, members: members}
-	return NewAssignmentService(store, ws, &mockTaskListStore{})
+	lists := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			wsID := uint(10)
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, WorkspaceID: &wsID}, nil
+		},
+	}
+	return NewAssignmentService(store, ws, lists)
 }
 
 func TestAssignmentService_Assign_Success(t *testing.T) {
@@ -119,6 +125,60 @@ func TestAssignmentService_Assign_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, store.assignments, 1)
 	assert.Equal(t, uint(5), store.assignments[0].UserID)
+}
+
+func TestAssignmentService_Assign_BackfillsNilWorkspaceID(t *testing.T) {
+	store := &mockAssignmentStore{}
+	ws := &mockWsStore{wsID: 10, members: map[uint]models.WorkspaceRole{
+		1: models.RoleOwner,
+		5: models.RoleEditor,
+	}}
+	var updated *models.TaskList
+	lists := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, WorkspaceID: nil}, nil
+		},
+		updateFunc: func(list *models.TaskList) error {
+			updated = list
+			return nil
+		},
+	}
+	svc := NewAssignmentService(store, ws, lists)
+
+	require.NoError(t, svc.Assign(1, 100, 5))
+	require.NotNil(t, updated)
+	require.NotNil(t, updated.WorkspaceID)
+	assert.Equal(t, uint(10), *updated.WorkspaceID)
+}
+
+func TestAssignmentService_Assign_RejectsOtherWorkspace(t *testing.T) {
+	store := &mockAssignmentStore{}
+	ws := &mockWsStore{wsID: 10, members: map[uint]models.WorkspaceRole{
+		1: models.RoleOwner,
+		5: models.RoleEditor,
+	}}
+	other := uint(99)
+	lists := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) {
+			return &models.TaskList{Base: models.Base{ID: id}, UserID: 1, WorkspaceID: &other}, nil
+		},
+	}
+	svc := NewAssignmentService(store, ws, lists)
+
+	err := svc.Assign(1, 100, 5)
+	assert.EqualError(t, err, "veículo não pertence a este workspace")
+}
+
+func TestAssignmentService_Assign_VehicleNotFound(t *testing.T) {
+	store := &mockAssignmentStore{}
+	ws := &mockWsStore{wsID: 10, members: map[uint]models.WorkspaceRole{
+		1: models.RoleOwner,
+		5: models.RoleEditor,
+	}}
+	svc := NewAssignmentService(store, ws, &mockTaskListStore{})
+
+	err := svc.Assign(1, 100, 5)
+	assert.EqualError(t, err, "veículo não encontrado")
 }
 
 func TestAssignmentService_Assign_NonManagerReturnsError(t *testing.T) {

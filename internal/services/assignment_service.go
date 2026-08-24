@@ -28,6 +28,7 @@ func NewAssignmentService(repo AssignmentStore, wsStore WorkspaceStore, listStor
 // Assign atribui um mecânico a um veículo.
 // Só owner e manager podem atribuir.
 // O usuário alvo deve ser membro do workspace.
+// O veículo deve pertencer ao mesmo workspace (workspace_id nulo é corrigido na atribuição).
 func (s *AssignmentService) Assign(requesterID, taskListID, targetUserID uint) error {
 	ws, err := s.wsStore.FindByMemberUserID(requesterID)
 	if err != nil {
@@ -37,6 +38,21 @@ func (s *AssignmentService) Assign(requesterID, taskListID, targetUserID uint) e
 	role, err := s.wsStore.GetMemberRole(ws.ID, requesterID)
 	if err != nil || (role != models.RoleOwner && role != models.RoleManager) {
 		return errors.New("apenas gerentes podem atribuir mecânicos")
+	}
+
+	list, err := s.listStore.FindByID(taskListID)
+	if err != nil {
+		return errors.New("veículo não encontrado")
+	}
+	if list.WorkspaceID != nil && *list.WorkspaceID != ws.ID {
+		return errors.New("veículo não pertence a este workspace")
+	}
+	if list.WorkspaceID == nil {
+		id := ws.ID
+		list.WorkspaceID = &id
+		if err := s.listStore.Update(list); err != nil {
+			return err
+		}
 	}
 
 	isMember, _ := s.wsStore.IsMember(ws.ID, targetUserID)

@@ -60,7 +60,31 @@ Lista convites (dono).
 Entra na oficina.
 
 ### GET /api/workspace/members
-Lista membros.
+Lista membros (todos os papéis). Cada item inclui o `user` associado.
+
+```json
+[
+  {
+    "id": 1,
+    "workspace_id": 1,
+    "user_id": 7,
+    "role": "editor",
+    "joined_at": "2026-08-10T14:00:00Z",
+    "last_seen_at": null,
+    "user": {
+      "id": 7,
+      "username": "mecanico@teste.com",
+      "first_name": "Ana",
+      "last_name": "Silva",
+      "created_at": "...",
+      "updated_at": "..."
+    }
+  }
+]
+```
+
+- `password` nunca é retornado.
+- `first_name` / `last_name` podem ser `""` em contas antigas (antes do cadastro com nome).
 
 ### DELETE /api/workspace/members/:userId
 Remove membro (dono).
