@@ -22,15 +22,17 @@ func NewAuthService(userRepo *repository.UserRepository) *AuthService {
 }
 
 // Register gera o hash da senha e cria o usuário através do repository.
-func (s *AuthService) Register(username, password string) error {
+func (s *AuthService) Register(username, password, firstName, lastName string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
 	user := &models.User{
-		Username: username,
-		Password: string(hash),
+		Username:  username,
+		FirstName: firstName,
+		LastName:  lastName,
+		Password:  string(hash),
 	}
 
 	return s.userRepo.Create(user)

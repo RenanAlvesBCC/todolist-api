@@ -9,12 +9,14 @@ No JSON, `lists` = veículos e `items` = serviços. Ver [GLOSSARIO.md](./GLOSSAR
 ## Públicos
 
 ### POST /register
-Body: `{ "username": "string", "password": "string" }`
+Body: `{ "username": "email", "password": "string", "first_name": "string", "last_name": "string" }`
+- `username` é o e-mail de login.
 - 201 `{ "message": "usuário criado com sucesso" }`
+- 400 dados inválidos / nome ou e-mail em branco
 - 409 usuário já existe
 
 ### POST /login
-Body: `{ "username": "string", "password": "string" }`
+Body: `{ "username": "email", "password": "string" }`
 - 200 `{ "token": "<jwt>" }`
 
 ### GET /invites/:code/preview
@@ -58,30 +60,7 @@ Lista convites (dono).
 Entra na oficina.
 
 ### GET /api/workspace/members
-Lista membros (todos os papéis). Cada item inclui o `user` associado (`id`, `username`; `password` omitido).
-
-```json
-[
-  {
-    "id": 1,
-    "workspace_id": 1,
-    "user_id": 1,
-    "role": "owner",
-    "joined_at": "2026-08-01T10:00:00Z",
-    "last_seen_at": null,
-    "user": { "id": 1, "username": "dono@oficina.com", "created_at": "...", "updated_at": "..." }
-  },
-  {
-    "id": 2,
-    "workspace_id": 1,
-    "user_id": 7,
-    "role": "editor",
-    "joined_at": "2026-08-10T14:00:00Z",
-    "last_seen_at": null,
-    "user": { "id": 7, "username": "mecanico@teste.com", "created_at": "...", "updated_at": "..." }
-  }
-]
-```
+Lista membros.
 
 ### DELETE /api/workspace/members/:userId
 Remove membro (dono).

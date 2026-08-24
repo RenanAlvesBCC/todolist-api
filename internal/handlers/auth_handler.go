@@ -13,7 +13,7 @@ import (
 )
 
 type AuthRegistrar interface {
-	Register(username, password string) error
+	Register(username, password, firstName, lastName string) error
 	Login(username, password string) (string, error)
 }
 
@@ -36,20 +36,35 @@ type credentials struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type registerInput struct {
+	Username  string `json:"username" binding:"required"`
+	Password  string `json:"password" binding:"required"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
-	var input credentials
+	var input registerInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos: " + err.Error()})
 		return
 	}
 
-	if err := h.authService.Register(input.Username, input.Password); err != nil {
-		h.securityRepo.LogAction(nil, "register_failed", c.ClientIP(), c.GetHeader("User-Agent"), input.Username, false)
+	firstName := strings.TrimSpace(input.FirstName)
+	lastName := strings.TrimSpace(input.LastName)
+	username := strings.TrimSpace(input.Username)
+	if firstName == "" || lastName == "" || username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nome, sobrenome e e-mail são obrigatórios"})
+		return
+	}
+
+	if err := h.authService.Register(username, input.Password, firstName, lastName); err != nil {
+		h.securityRepo.LogAction(nil, "register_failed", c.ClientIP(), c.GetHeader("User-Agent"), username, false)
 		c.JSON(http.StatusConflict, gin.H{"error": "usuário já existe"})
 		return
 	}
 
-	h.securityRepo.LogAction(nil, "register_success", c.ClientIP(), c.GetHeader("User-Agent"), input.Username, true)
+	h.securityRepo.LogAction(nil, "register_success", c.ClientIP(), c.GetHeader("User-Agent"), username, true)
 	c.JSON(http.StatusCreated, gin.H{"message": "usuário criado com sucesso"})
 }
 

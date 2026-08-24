@@ -17,15 +17,15 @@ import (
 )
 
 type mockAuthRegistrar struct {
-	registerFunc func(username, password string) error
+	registerFunc func(username, password, firstName, lastName string) error
 	loginFunc    func(username, password string) (string, error)
 }
 
-func (m *mockAuthRegistrar) Register(username, password string) error {
+func (m *mockAuthRegistrar) Register(username, password, firstName, lastName string) error {
 	if m.registerFunc == nil {
 		return nil
 	}
-	return m.registerFunc(username, password)
+	return m.registerFunc(username, password, firstName, lastName)
 }
 func (m *mockAuthRegistrar) Login(username, password string) (string, error) {
 	if m.loginFunc == nil {
@@ -66,7 +66,8 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	auditor := &mockTokenAuditor{}
 	h := &AuthHandler{authService: &mockAuthRegistrar{}, securityRepo: auditor}
 	rec := jsonRequest(setupAuthRouter(h), http.MethodPost, "/register", map[string]string{
-		"username": "ana", "password": "senha123",
+		"username": "ana@oficina.com", "password": "senha123",
+		"first_name": "Ana", "last_name": "Silva",
 	})
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Contains(t, rec.Body.String(), "usuário criado com sucesso")
@@ -79,16 +80,28 @@ func TestAuthHandler_Register_InvalidBodyReturns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestAuthHandler_Register_BlankNamesReturns400(t *testing.T) {
+	h := &AuthHandler{authService: &mockAuthRegistrar{}, securityRepo: &mockTokenAuditor{}}
+	rec := jsonRequest(setupAuthRouter(h), http.MethodPost, "/register", map[string]string{
+		"username": "ana@oficina.com", "password": "senha123",
+		"first_name": "  ", "last_name": "Silva",
+	})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestAuthHandler_Register_ConflictReturns409(t *testing.T) {
 	auditor := &mockTokenAuditor{}
 	h := &AuthHandler{
 		authService: &mockAuthRegistrar{
-			registerFunc: func(username, password string) error { return errors.New("duplicado") },
+			registerFunc: func(username, password, firstName, lastName string) error {
+				return errors.New("duplicado")
+			},
 		},
 		securityRepo: auditor,
 	}
 	rec := jsonRequest(setupAuthRouter(h), http.MethodPost, "/register", map[string]string{
-		"username": "ana", "password": "senha123",
+		"username": "ana@oficina.com", "password": "senha123",
+		"first_name": "Ana", "last_name": "Silva",
 	})
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, []string{"register_failed"}, auditor.actions)
