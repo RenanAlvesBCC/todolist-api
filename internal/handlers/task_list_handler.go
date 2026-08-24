@@ -15,10 +15,10 @@ import (
 
 // TaskListProvider descreve o que o handler precisa do service de listas.
 type TaskListProvider interface {
-	CreateList(userID uint, title string) (*models.TaskList, error)
+	CreateList(userID uint, title, plate, customer string) (*models.TaskList, error)
 	ListAll(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error)
 	GetList(listID, userID uint) (*models.TaskList, error)
-	UpdateList(listID, userID uint, title string) (*models.TaskList, error)
+	UpdateList(listID, userID uint, title, plate, customer string) (*models.TaskList, error)
 	DeleteList(listID, userID uint) error
 	AddItem(listID, userID uint, text string) (*models.TaskItem, error)
 	UpdateItem(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
@@ -42,7 +42,9 @@ func getUserID(c *gin.Context) uint {
 }
 
 type listInput struct {
-	Title string `json:"title" binding:"required"`
+	Title    string `json:"title" binding:"required"`
+	Plate    string `json:"plate"`
+	Customer string `json:"customer"`
 }
 
 type createItemInput struct {
@@ -61,7 +63,7 @@ func (h *TaskListHandler) Create(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.CreateList(getUserID(c), input.Title)
+	list, err := h.listService.CreateList(getUserID(c), input.Title, input.Plate, input.Customer)
 	if err != nil {
 		if errors.Is(err, services.ErrNotManager) {
 			utils.RespondError(c, http.StatusForbidden, err.Error())
@@ -116,7 +118,7 @@ func (h *TaskListHandler) Update(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.Title)
+	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.Title, input.Plate, input.Customer)
 	if err != nil {
 		if errors.Is(err, services.ErrNotManager) {
 			utils.RespondError(c, http.StatusForbidden, err.Error())

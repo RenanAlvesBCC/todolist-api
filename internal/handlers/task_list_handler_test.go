@@ -17,10 +17,10 @@ import (
 )
 
 type mockTaskListProvider struct {
-	createListFunc   func(userID uint, title string) (*models.TaskList, error)
+	createListFunc   func(userID uint, title, plate, customer string) (*models.TaskList, error)
 	listAllFunc      func(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error)
 	getListFunc      func(listID, userID uint) (*models.TaskList, error)
-	updateListFunc   func(listID, userID uint, title string) (*models.TaskList, error)
+	updateListFunc   func(listID, userID uint, title, plate, customer string) (*models.TaskList, error)
 	deleteListFunc   func(listID, userID uint) error
 	addItemFunc      func(listID, userID uint, text string) (*models.TaskItem, error)
 	updateItemFunc   func(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
@@ -32,11 +32,11 @@ type mockTaskListProvider struct {
 	changeStatusFunc   func(listID, userID uint, newStatus models.TaskListStatus) error
 }
 
-func (m *mockTaskListProvider) CreateList(userID uint, title string) (*models.TaskList, error) {
+func (m *mockTaskListProvider) CreateList(userID uint, title, plate, customer string) (*models.TaskList, error) {
 	if m.createListFunc == nil {
 		return nil, nil
 	}
-	return m.createListFunc(userID, title)
+	return m.createListFunc(userID, title, plate, customer)
 }
 func (m *mockTaskListProvider) ListAll(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error) {
 	if m.listAllFunc == nil {
@@ -50,11 +50,11 @@ func (m *mockTaskListProvider) GetList(listID, userID uint) (*models.TaskList, e
 	}
 	return m.getListFunc(listID, userID)
 }
-func (m *mockTaskListProvider) UpdateList(listID, userID uint, title string) (*models.TaskList, error) {
+func (m *mockTaskListProvider) UpdateList(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
 	if m.updateListFunc == nil {
 		return nil, nil
 	}
-	return m.updateListFunc(listID, userID, title)
+	return m.updateListFunc(listID, userID, title, plate, customer)
 }
 func (m *mockTaskListProvider) DeleteList(listID, userID uint) error {
 	if m.deleteListFunc == nil {
@@ -137,8 +137,8 @@ func setupRouter(provider *mockTaskListProvider) *gin.Engine {
 
 func TestTaskListHandler_Create_Success(t *testing.T) {
 	provider := &mockTaskListProvider{
-		createListFunc: func(userID uint, title string) (*models.TaskList, error) {
-			return &models.TaskList{Title: title, UserID: userID}, nil
+		createListFunc: func(userID uint, title, plate, customer string) (*models.TaskList, error) {
+			return &models.TaskList{Title: title, Plate: plate, Customer: customer, UserID: userID}, nil
 		},
 	}
 	router := setupRouter(provider)
@@ -155,6 +155,31 @@ func TestTaskListHandler_Create_Success(t *testing.T) {
 	var response models.TaskList
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 	assert.Equal(t, "Compras da semana", response.Title)
+}
+
+func TestTaskListHandler_Create_ForwardsPlateAndCustomer(t *testing.T) {
+	var gotPlate, gotCustomer string
+	provider := &mockTaskListProvider{
+		createListFunc: func(userID uint, title, plate, customer string) (*models.TaskList, error) {
+			gotPlate, gotCustomer = plate, customer
+			return &models.TaskList{Title: title, Plate: plate, Customer: customer, UserID: userID}, nil
+		},
+	}
+	router := setupRouter(provider)
+
+	body, _ := json.Marshal(map[string]string{
+		"title":    "Fusca",
+		"plate":    "abc-1234",
+		"customer": "Ana",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/lists", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "abc-1234", gotPlate)
+	assert.Equal(t, "Ana", gotCustomer)
 }
 
 func TestTaskListHandler_Create_MissingTitleReturns400(t *testing.T) {
@@ -267,7 +292,7 @@ func jsonRequest(router *gin.Engine, method, path string, body any) *httptest.Re
 
 func TestTaskListHandler_Create_ErrNotManagerReturns403(t *testing.T) {
 	router := setupRouter(&mockTaskListProvider{
-		createListFunc: func(userID uint, title string) (*models.TaskList, error) {
+		createListFunc: func(userID uint, title, plate, customer string) (*models.TaskList, error) {
 			return nil, services.ErrNotManager
 		},
 	})
@@ -277,7 +302,7 @@ func TestTaskListHandler_Create_ErrNotManagerReturns403(t *testing.T) {
 
 func TestTaskListHandler_Create_ServiceErrorReturns400(t *testing.T) {
 	router := setupRouter(&mockTaskListProvider{
-		createListFunc: func(userID uint, title string) (*models.TaskList, error) {
+		createListFunc: func(userID uint, title, plate, customer string) (*models.TaskList, error) {
 			return nil, errors.New("título é obrigatório")
 		},
 	})
@@ -334,12 +359,22 @@ func TestTaskListHandler_Get_Success(t *testing.T) {
 
 func TestTaskListHandler_Update_Success(t *testing.T) {
 	router := setupRouter(&mockTaskListProvider{
-		updateListFunc: func(listID, userID uint, title string) (*models.TaskList, error) {
-			return &models.TaskList{Title: title, UserID: userID}, nil
+		updateListFunc: func(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
+			return &models.TaskList{Title: title, Plate: plate, Customer: customer, UserID: userID}, nil
 		},
 	})
-	rec := jsonRequest(router, http.MethodPut, "/api/lists/3", map[string]string{"title": "Novo título"})
+	rec := jsonRequest(router, http.MethodPut, "/api/lists/3", map[string]string{
+		"title":    "Novo título",
+		"plate":    "ABC1D23",
+		"customer": "Maria",
+	})
 	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response models.TaskList
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, "Novo título", response.Title)
+	assert.Equal(t, "ABC1D23", response.Plate)
+	assert.Equal(t, "Maria", response.Customer)
 }
 
 func TestTaskListHandler_Update_InvalidIDReturns400(t *testing.T) {
@@ -354,7 +389,7 @@ func TestTaskListHandler_Update_InvalidBodyReturns400(t *testing.T) {
 
 func TestTaskListHandler_Update_ErrNotManagerReturns403(t *testing.T) {
 	router := setupRouter(&mockTaskListProvider{
-		updateListFunc: func(listID, userID uint, title string) (*models.TaskList, error) {
+		updateListFunc: func(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
 			return nil, services.ErrNotManager
 		},
 	})
@@ -364,7 +399,7 @@ func TestTaskListHandler_Update_ErrNotManagerReturns403(t *testing.T) {
 
 func TestTaskListHandler_Update_NotFoundReturns404(t *testing.T) {
 	router := setupRouter(&mockTaskListProvider{
-		updateListFunc: func(listID, userID uint, title string) (*models.TaskList, error) {
+		updateListFunc: func(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
 			return nil, errors.New("lista não encontrada")
 		},
 	})

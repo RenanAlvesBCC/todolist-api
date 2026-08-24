@@ -254,11 +254,28 @@ func TestWorkspaceHandler_AcceptInvite_ServiceErrorReturns400(t *testing.T) {
 func TestWorkspaceHandler_ListMembers_Success(t *testing.T) {
 	router := setupWorkspaceRouter(&mockWorkspaceProvider{
 		membersFunc: func(requesterID uint) ([]models.WorkspaceMember, error) {
-			return []models.WorkspaceMember{{UserID: 1, Role: models.RoleOwner}}, nil
+			return []models.WorkspaceMember{
+				{
+					UserID: 1,
+					Role:   models.RoleOwner,
+					User:   &models.User{Base: models.Base{ID: 1}, Username: "dono@oficina.com"},
+				},
+				{
+					UserID: 7,
+					Role:   models.RoleEditor,
+					User:   &models.User{Base: models.Base{ID: 7}, Username: "mecanico@teste.com"},
+				},
+			}, nil
 		},
 	})
 	rec := jsonRequest(router, http.MethodGet, "/api/workspace/members", nil)
 	assert.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `"username":"dono@oficina.com"`)
+	assert.Contains(t, body, `"username":"mecanico@teste.com"`)
+	assert.Contains(t, body, `"role":"owner"`)
+	assert.Contains(t, body, `"role":"editor"`)
+	assert.NotContains(t, body, `"password"`)
 }
 
 func TestWorkspaceHandler_ListMembers_NotFoundReturns404(t *testing.T) {

@@ -128,7 +128,12 @@ func TestWorkspaceRepository_UpdateFindMemberListAndInvites(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewWorkspaceRepository(db)
 
-	ws := &models.Workspace{Name: "Oficina", Description: "a", OwnerID: 1}
+	owner := &models.User{Username: "dono@oficina.com", Password: "hash"}
+	editor := &models.User{Username: "mecanico@teste.com", Password: "hash"}
+	require.NoError(t, db.Create(owner).Error)
+	require.NoError(t, db.Create(editor).Error)
+
+	ws := &models.Workspace{Name: "Oficina", Description: "a", OwnerID: owner.ID}
 	require.NoError(t, repo.Create(ws))
 
 	ws.Name = "Oficina Centro"
@@ -137,24 +142,34 @@ func TestWorkspaceRepository_UpdateFindMemberListAndInvites(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Oficina Centro", byID.Name)
 
-	member := &models.WorkspaceMember{WorkspaceID: ws.ID, UserID: 2, Role: models.RoleEditor, JoinedAt: time.Now()}
-	require.NoError(t, repo.AddMember(member))
+	require.NoError(t, repo.AddMember(&models.WorkspaceMember{
+		WorkspaceID: ws.ID, UserID: owner.ID, Role: models.RoleOwner, JoinedAt: time.Now(),
+	}))
+	require.NoError(t, repo.AddMember(&models.WorkspaceMember{
+		WorkspaceID: ws.ID, UserID: editor.ID, Role: models.RoleEditor, JoinedAt: time.Now().Add(time.Second),
+	}))
 
-	foundMember, err := repo.FindMember(ws.ID, 2)
+	foundMember, err := repo.FindMember(ws.ID, editor.ID)
 	require.NoError(t, err)
 	assert.Equal(t, models.RoleEditor, foundMember.Role)
 
 	_, err = repo.FindMember(ws.ID, 99)
 	assert.Error(t, err)
 
-	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, 2))
+	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, editor.ID))
 
 	members, err := repo.ListMembers(ws.ID)
 	require.NoError(t, err)
-	assert.Len(t, members, 1)
+	require.Len(t, members, 2)
+	assert.Equal(t, models.RoleOwner, members[0].Role)
+	require.NotNil(t, members[0].User)
+	assert.Equal(t, "dono@oficina.com", members[0].User.Username)
+	assert.Equal(t, models.RoleEditor, members[1].Role)
+	require.NotNil(t, members[1].User)
+	assert.Equal(t, "mecanico@teste.com", members[1].User.Username)
 
 	invite := &models.WorkspaceInvite{
-		WorkspaceID: ws.ID, InvitedBy: 1, Code: "code-1", Role: models.RoleEditor, ExpiresAt: time.Now().Add(time.Hour),
+		WorkspaceID: ws.ID, InvitedBy: owner.ID, Code: "code-1", Role: models.RoleEditor, ExpiresAt: time.Now().Add(time.Hour),
 	}
 	require.NoError(t, repo.CreateInvite(invite))
 
@@ -163,7 +178,7 @@ func TestWorkspaceRepository_UpdateFindMemberListAndInvites(t *testing.T) {
 	assert.Len(t, invites, 1)
 
 	now := time.Now()
-	uid := uint(2)
+	uid := editor.ID
 	invite.UsedAt = &now
 	invite.UsedBy = &uid
 	require.NoError(t, repo.MarkInviteUsed(invite))
@@ -186,6 +201,9 @@ func TestWorkspaceRepository_FindByIDUpdateAndMembers(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewWorkspaceRepository(db)
 
+	editor := &models.User{Username: "mecanico@teste.com", Password: "hash"}
+	require.NoError(t, db.Create(editor).Error)
+
 	ws := &models.Workspace{Name: "Oficina", OwnerID: 1, Description: "a"}
 	require.NoError(t, repo.Create(ws))
 
@@ -202,21 +220,23 @@ func TestWorkspaceRepository_FindByIDUpdateAndMembers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Oficina Nova", updated.Name)
 
-	member := &models.WorkspaceMember{WorkspaceID: ws.ID, UserID: 2, Role: models.RoleEditor, JoinedAt: time.Now()}
+	member := &models.WorkspaceMember{WorkspaceID: ws.ID, UserID: editor.ID, Role: models.RoleEditor, JoinedAt: time.Now()}
 	require.NoError(t, repo.AddMember(member))
 
-	got, err := repo.FindMember(ws.ID, 2)
+	got, err := repo.FindMember(ws.ID, editor.ID)
 	require.NoError(t, err)
 	assert.Equal(t, models.RoleEditor, got.Role)
 
 	_, err = repo.FindMember(ws.ID, 99)
 	assert.Error(t, err)
 
-	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, 2))
+	require.NoError(t, repo.UpdateMemberLastSeen(ws.ID, editor.ID))
 	members, err := repo.ListMembers(ws.ID)
 	require.NoError(t, err)
-	assert.Len(t, members, 1)
+	require.Len(t, members, 1)
 	assert.NotNil(t, members[0].LastSeenAt)
+	require.NotNil(t, members[0].User)
+	assert.Equal(t, "mecanico@teste.com", members[0].User.Username)
 
 	_, err = repo.FindByMemberUserID(99)
 	assert.Error(t, err)

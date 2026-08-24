@@ -125,7 +125,9 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Fusca 1972 ABC-1234"
+  "title": "Fusca 1972",
+  "plate": "ABC-1234",
+  "customer": "João Silva"
 }
 
 ### Criar segundo veiculo
@@ -135,7 +137,9 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Gol 2010 XYZ-9876"
+  "title": "Gol 2010",
+  "plate": "XYZ-9876",
+  "customer": "Maria Souza"
 }
 
 ### Listar veiculos
@@ -150,13 +154,15 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-### Atualizar titulo do veiculo
+### Atualizar ficha do veiculo
 PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 Content-Type: application/json
 
 {
-  "title": "Fusca 1972 ABC-1234 revisao"
+  "title": "Fusca 1972 revisao",
+  "plate": "ABC-1234",
+  "customer": "João Silva"
 }
 
 ### Reordenar veiculos

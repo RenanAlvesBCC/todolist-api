@@ -58,7 +58,30 @@ Lista convites (dono).
 Entra na oficina.
 
 ### GET /api/workspace/members
-Lista membros.
+Lista membros (todos os papéis). Cada item inclui o `user` associado (`id`, `username`; `password` omitido).
+
+```json
+[
+  {
+    "id": 1,
+    "workspace_id": 1,
+    "user_id": 1,
+    "role": "owner",
+    "joined_at": "2026-08-01T10:00:00Z",
+    "last_seen_at": null,
+    "user": { "id": 1, "username": "dono@oficina.com", "created_at": "...", "updated_at": "..." }
+  },
+  {
+    "id": 2,
+    "workspace_id": 1,
+    "user_id": 7,
+    "role": "editor",
+    "joined_at": "2026-08-10T14:00:00Z",
+    "last_seen_at": null,
+    "user": { "id": 7, "username": "mecanico@teste.com", "created_at": "...", "updated_at": "..." }
+  }
+]
+```
 
 ### DELETE /api/workspace/members/:userId
 Remove membro (dono).
@@ -66,7 +89,7 @@ Remove membro (dono).
 ## Veículos (`/api/lists`)
 
 ### GET /api/lists
-Query: `search`, `page`, `limit`, `status`, `mine=true`.
+Query: `search`, `page`, `limit`, `status`, `mine=true`. `search` casa com `title`, `plate` ou `customer`.
 
 - `owner` / `manager`: pátio inteiro (filtros opcionais).
 - `editor`: **somente veículos em que está atribuído** (mesmo sem `mine`).
@@ -87,13 +110,13 @@ Resposta:
 Status: `em_andamento` | `aguardando_orcamento` | `aguardando_peca` | `aprovado` | `concluido`.
 
 ### POST /api/lists
-Cria veículo. Só `owner`/`manager`. Body: `{ "title": "string" }`. 201.
+Cria veículo. Só `owner`/`manager`. Body: `{ "title": "string", "plate": "string", "customer": "string" }`. `plate` e `customer` opcionais (default `""`). Placa é normalizada (trim + maiúsculas), sem validação de formato. 201.
 
 ### GET /api/lists/:id
 Detalhe. Mecânico só se atribuído ou membro com acesso ao veículo da esteira.
 
 ### PUT /api/lists/:id
-Título. Só `owner`/`manager`.
+Ficha (`title`, `plate`, `customer`). Só `owner`/`manager`. Substitui os três campos; `title` obrigatório. Mecânico só lê.
 
 ### DELETE /api/lists/:id
 Remove veículo e serviços. Só `owner`/`manager`.
@@ -168,7 +191,7 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `user_id`, `workspace_id`, `status`, `position`, `items[]`, `assignments[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `items[]`, `assignments[]`.
 
 IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags maiúsculas em algum campo; clientes devem decodificar de forma tolerante.
 

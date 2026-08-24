@@ -62,7 +62,8 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 		query = r.db.Model(&models.TaskList{}).Where("user_id = ? AND workspace_id IS NULL", userID)
 	}
 	if filter.Search != "" {
-		query = query.Where("title LIKE ?", "%"+filter.Search+"%")
+		like := "%" + filter.Search + "%"
+		query = query.Where("title LIKE ? OR plate LIKE ? OR customer LIKE ?", like, like, like)
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)

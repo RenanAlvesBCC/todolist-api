@@ -74,7 +74,8 @@ func (r *WorkspaceRepository) RemoveMember(workspaceID, userID uint) error {
 
 func (r *WorkspaceRepository) ListMembers(workspaceID uint) ([]models.WorkspaceMember, error) {
 	var members []models.WorkspaceMember
-	if err := r.db.Where("workspace_id = ?", workspaceID).
+	if err := r.db.Preload("User").
+		Where("workspace_id = ?", workspaceID).
 		Order("joined_at asc").
 		Find(&members).Error; err != nil {
 		return nil, err

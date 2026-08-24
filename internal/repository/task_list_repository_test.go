@@ -49,6 +49,27 @@ func TestTaskListRepository_FindAllByUser_FiltersAndPaginates(t *testing.T) {
 	assert.Len(t, lists, 2)
 }
 
+func TestTaskListRepository_FindAllByUser_SearchMatchesPlateOrCustomer(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewTaskListRepository(db)
+
+	require.NoError(t, repo.Create(&models.TaskList{Title: "Gol", Plate: "ABC1D23", Customer: "Maria", UserID: 1}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "Civic", Plate: "XYZ9A87", Customer: "João", UserID: 1}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "Uno", Plate: "QWE0F00", Customer: "Pedro", UserID: 1}))
+
+	byPlate, totalPlate, err := repo.FindAll(1, nil, TaskListFilter{Search: "ABC1", Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), totalPlate)
+	require.Len(t, byPlate, 1)
+	assert.Equal(t, "Gol", byPlate[0].Title)
+
+	byCustomer, totalCustomer, err := repo.FindAll(1, nil, TaskListFilter{Search: "João", Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), totalCustomer)
+	require.Len(t, byCustomer, 1)
+	assert.Equal(t, "Civic", byCustomer[0].Title)
+}
+
 func TestTaskListRepository_FindAllByUser_PreloadsItems(t *testing.T) {
 	db := setupTestDB(t)
 	listRepo := NewTaskListRepository(db)

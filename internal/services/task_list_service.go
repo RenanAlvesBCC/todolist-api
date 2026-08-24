@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"math"
+	"strings"
 
 	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
@@ -65,7 +66,15 @@ func (s *TaskListService) requireManager(userID uint) error {
 	return nil
 }
 
-func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskList, error) {
+func normalizePlate(plate string) string {
+	return strings.ToUpper(strings.TrimSpace(plate))
+}
+
+func normalizeCustomer(customer string) string {
+	return strings.TrimSpace(customer)
+}
+
+func (s *TaskListService) CreateList(userID uint, title, plate, customer string) (*models.TaskList, error) {
 	if title == "" {
 		return nil, errors.New("título é obrigatório")
 	}
@@ -88,6 +97,8 @@ func (s *TaskListService) CreateList(userID uint, title string) (*models.TaskLis
 
 	list := &models.TaskList{
 		Title:       title,
+		Plate:       normalizePlate(plate),
+		Customer:    normalizeCustomer(customer),
 		UserID:      userID,
 		WorkspaceID: wsID,
 		Position:    position,
@@ -173,7 +184,7 @@ func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error)
 	return s.resolveList(listID, userID)
 }
 
-func (s *TaskListService) UpdateList(listID, userID uint, title string) (*models.TaskList, error) {
+func (s *TaskListService) UpdateList(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
 	if title == "" {
 		return nil, errors.New("título é obrigatório")
 	}
@@ -187,6 +198,8 @@ func (s *TaskListService) UpdateList(listID, userID uint, title string) (*models
 	}
 
 	list.Title = title
+	list.Plate = normalizePlate(plate)
+	list.Customer = normalizeCustomer(customer)
 	if err := s.listRepo.Update(list); err != nil {
 		return nil, err
 	}

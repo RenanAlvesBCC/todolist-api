@@ -25,6 +25,7 @@ type WorkspaceMember struct {
 	Role        WorkspaceRole `gorm:"not null;default:'editor'" json:"role"`
 	JoinedAt    time.Time     `json:"joined_at"`
 	LastSeenAt  *time.Time    `json:"last_seen_at"`
+	User        *User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 type WorkspaceInvite struct {

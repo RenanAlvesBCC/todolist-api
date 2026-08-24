@@ -13,6 +13,8 @@ const (
 type TaskList struct {
 	Base
 	Title       string           `gorm:"not null" json:"title"`
+	Plate       string           `gorm:"not null;default:''" json:"plate"`
+	Customer    string           `gorm:"not null;default:''" json:"customer"`
 	UserID      uint             `gorm:"not null" json:"user_id"`
 	WorkspaceID *uint            `json:"workspace_id"`
 	Status      TaskListStatus   `gorm:"not null;default:'em_andamento'" json:"status"`

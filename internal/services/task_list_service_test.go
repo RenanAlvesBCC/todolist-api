@@ -162,17 +162,32 @@ func TestTaskListService_CreateList_Success(t *testing.T) {
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
 
-	list, err := service.CreateList(1, "Compras da semana")
+	list, err := service.CreateList(1, "Compras da semana", "", "")
 
 	require.NoError(t, err)
 	assert.Equal(t, uint(1), list.ID)
 	assert.Equal(t, models.StatusEmAndamento, list.Status)
+	assert.Equal(t, "", list.Plate)
+	assert.Equal(t, "", list.Customer)
+}
+
+func TestTaskListService_CreateList_NormalizesPlateAndCustomer(t *testing.T) {
+	store := &mockTaskListStore{
+		nextPositionFunc: func(userID uint) (int, error) { return 0, nil },
+		createFunc:       func(list *models.TaskList) error { return nil },
+	}
+	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
+
+	list, err := service.CreateList(1, "Fusca", "  abc-1d23  ", "  Ana  ")
+	require.NoError(t, err)
+	assert.Equal(t, "ABC-1D23", list.Plate)
+	assert.Equal(t, "Ana", list.Customer)
 }
 
 func TestTaskListService_CreateList_EmptyTitleReturnsError(t *testing.T) {
 	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, nil)
 
-	_, err := service.CreateList(1, "")
+	_, err := service.CreateList(1, "", "", "")
 
 	assert.EqualError(t, err, "título é obrigatório")
 }
@@ -367,7 +382,7 @@ func TestTaskListService_CreateList_EditorForbidden(t *testing.T) {
 	}
 	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, ws)
 
-	_, err := service.CreateList(5, "Gol 2012")
+	_, err := service.CreateList(5, "Gol 2012", "", "")
 
 	assert.ErrorIs(t, err, ErrNotManager)
 }
@@ -426,11 +441,13 @@ func TestTaskListService_UpdateList_Success(t *testing.T) {
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
 
-	list, err := svc.UpdateList(1, 1, "Civic")
+	list, err := svc.UpdateList(1, 1, "Civic", "abc-1234", "  Maria  ")
 	require.NoError(t, err)
 	assert.Equal(t, "Civic", list.Title)
+	assert.Equal(t, "ABC-1234", list.Plate)
+	assert.Equal(t, "Maria", list.Customer)
 
-	_, err = svc.UpdateList(1, 1, "")
+	_, err = svc.UpdateList(1, 1, "", "", "")
 	assert.EqualError(t, err, "título é obrigatório")
 }
 
@@ -553,10 +570,12 @@ func TestTaskListService_CreateList_WithWorkspace(t *testing.T) {
 		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner},
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, ws)
-	list, err := svc.CreateList(1, "Gol")
+	list, err := svc.CreateList(1, "Gol", "xyz-9876", "João")
 	require.NoError(t, err)
 	require.NotNil(t, list.WorkspaceID)
 	assert.Equal(t, wsID, *list.WorkspaceID)
+	assert.Equal(t, "XYZ-9876", list.Plate)
+	assert.Equal(t, "João", list.Customer)
 }
 
 func TestTaskListService_UpdateItem_EmptyText(t *testing.T) {

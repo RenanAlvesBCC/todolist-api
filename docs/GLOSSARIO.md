@@ -9,6 +9,8 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Gerente | `manager` |
 | Mecânico | `editor` |
 | Veículo / carro na esteira | `TaskList`, `/api/lists` |
+| Placa | `plate` |
+| Cliente | `customer` |
 | Serviço (item de trabalho) | `TaskItem`, `/api/lists/:id/items` |
 | Mecânico atribuído | `ListAssignment`, `/assignments` |
 | Linha de orçamento | `QuoteItem`, `/quotes` |
