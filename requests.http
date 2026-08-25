@@ -1,5 +1,5 @@
-@baseUrl = https://todolist-api-tq9d.onrender.com
-# Local: http://localhost:8080
+@baseUrl = http://localhost:8080
+# Prod (Render): https://todolist-api-tq9d.onrender.com
 @owner = gerente@teste.com
 @mechanic = mecanico@teste.com
 @password = abcd@1234
