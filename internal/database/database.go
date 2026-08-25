@@ -35,8 +35,15 @@ func Connect() {
 		log.Fatal("Falha ao migrar o banco de dados: ", err)
 	}
 
+	migrateLegacyStatuses(db)
+
 	DB = db
 	log.Println("Banco de dados conectado e migrado com sucesso")
+}
+
+func migrateLegacyStatuses(db *gorm.DB) {
+	_ = db.Model(&models.TaskList{}).Where("status = ?", "aprovado").Update("status", models.StatusAguardandoRetirada)
+	_ = db.Model(&models.TaskList{}).Where("status = ?", "concluido").Update("status", models.StatusEntregue)
 }
 
 func openDB() (*gorm.DB, error) {

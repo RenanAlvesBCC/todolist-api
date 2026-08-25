@@ -158,12 +158,12 @@ func TestTaskListRepository_FindAll_StatusAndAssignedFilters(t *testing.T) {
 
 	wsID := uint(10)
 	a := &models.TaskList{Title: "A", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEmAndamento}
-	b := &models.TaskList{Title: "B", UserID: 1, WorkspaceID: &wsID, Status: models.StatusConcluido}
+	b := &models.TaskList{Title: "B", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEntregue}
 	require.NoError(t, listRepo.Create(a))
 	require.NoError(t, listRepo.Create(b))
 	require.NoError(t, assignRepo.Assign(&models.ListAssignment{TaskListID: a.ID, UserID: 5, AssignedBy: 1, AssignedAt: time.Now()}))
 
-	byStatus, total, err := listRepo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusConcluido), Page: 1, Limit: 10})
+	byStatus, total, err := listRepo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusEntregue), Page: 1, Limit: 10})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, byStatus, 1)
@@ -184,7 +184,7 @@ func TestTaskListRepository_FindAll_WorkspaceStatusAndAssigned(t *testing.T) {
 
 	wsID := uint(10)
 	a := &models.TaskList{Title: "Gol", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEmAndamento}
-	b := &models.TaskList{Title: "Uno", UserID: 1, WorkspaceID: &wsID, Status: models.StatusAprovado}
+	b := &models.TaskList{Title: "Uno", UserID: 1, WorkspaceID: &wsID, Status: models.StatusAguardandoRetirada}
 	personal := &models.TaskList{Title: "Pessoal", UserID: 1}
 	require.NoError(t, repo.Create(a))
 	require.NoError(t, repo.Create(b))
@@ -196,7 +196,7 @@ func TestTaskListRepository_FindAll_WorkspaceStatusAndAssigned(t *testing.T) {
 	assert.Equal(t, int64(3), total)
 	assert.Len(t, all, 3)
 
-	byStatus, stTotal, err := repo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusAprovado), Page: 1, Limit: 10})
+	byStatus, stTotal, err := repo.FindAll(1, &wsID, TaskListFilter{Status: string(models.StatusAguardandoRetirada), Page: 1, Limit: 10})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), stTotal)
 	require.Len(t, byStatus, 1)

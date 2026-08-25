@@ -20,11 +20,20 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 
 ## Status do veículo
 
-- `em_andamento`
+- `aguardando_box`
+- `em_diagnostico`
 - `aguardando_orcamento`
+- `em_andamento`
 - `aguardando_peca`
-- `aprovado` (só dono/gerente)
-- `concluido` (só dono/gerente)
+- `test_drive`
+- `lava_jato`
+- `aguardando_checkup`
+- `aguardando_retirada`
+- `entregue`
+
+Fluxo linear é sugestão de UI; mecânico e gerente podem setar qualquer status válido.
+
+Legado (migrado no boot): `aprovado` → `aguardando_retirada`; `concluido` → `entregue`.
 
 ## Tipos de pendência
 

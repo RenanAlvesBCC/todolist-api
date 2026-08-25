@@ -166,7 +166,7 @@ func TestTaskListService_CreateList_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, uint(1), list.ID)
-	assert.Equal(t, models.StatusEmAndamento, list.Status)
+	assert.Equal(t, models.StatusAguardandoBox, list.Status)
 	assert.Equal(t, "", list.Plate)
 	assert.Equal(t, "", list.Customer)
 }
@@ -328,7 +328,7 @@ func TestTaskListService_ChangeStatus_EditorValidTransition(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
+func TestTaskListService_ChangeStatus_EditorCanSetAnyValidStatus(t *testing.T) {
 	wsID := uint(10)
 	store := &mockTaskListStore{
 		findByIDFunc: func(id uint) (*models.TaskList, error) {
@@ -339,6 +339,7 @@ func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
 				Assignments: []models.ListAssignment{{UserID: 5}},
 			}, nil
 		},
+		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	ws := &mockWsCtxStore{
 		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
@@ -346,9 +347,9 @@ func TestTaskListService_ChangeStatus_EditorCannotApprove(t *testing.T) {
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
 
-	err := service.ChangeStatus(1, 5, models.StatusAprovado)
+	err := service.ChangeStatus(1, 5, models.StatusAguardandoRetirada)
 
-	assert.EqualError(t, err, "transição de status não permitida para seu papel")
+	require.NoError(t, err)
 }
 
 func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
@@ -369,7 +370,7 @@ func TestTaskListService_ChangeStatus_OwnerCanApprove(t *testing.T) {
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, ws)
 
-	err := service.ChangeStatus(1, 1, models.StatusAprovado)
+	err := service.ChangeStatus(1, 1, models.StatusAguardandoRetirada)
 
 	require.NoError(t, err)
 }
@@ -545,7 +546,7 @@ func TestTaskListService_ChangeStatus_PersonalOwner(t *testing.T) {
 		updateFunc: func(list *models.TaskList) error { return nil },
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
-	require.NoError(t, svc.ChangeStatus(1, 1, models.StatusAprovado))
+	require.NoError(t, svc.ChangeStatus(1, 1, models.StatusAguardandoRetirada))
 }
 
 func TestTaskListService_ChangeStatus_AccessDenied(t *testing.T) {
@@ -555,7 +556,7 @@ func TestTaskListService_ChangeStatus_AccessDenied(t *testing.T) {
 		},
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
-	err := svc.ChangeStatus(1, 9, models.StatusAprovado)
+	err := svc.ChangeStatus(1, 9, models.StatusAguardandoRetirada)
 	assert.EqualError(t, err, "lista não encontrada")
 }
 
@@ -584,10 +585,10 @@ func TestTaskListService_UpdateItem_EmptyText(t *testing.T) {
 	assert.EqualError(t, err, "texto do item é obrigatório")
 }
 
-func TestIsValidTransition_EditorFromWaitingStates(t *testing.T) {
-	assert.True(t, isValidTransition(models.RoleEditor, models.StatusAguardandoOrcamento, models.StatusEmAndamento))
-	assert.True(t, isValidTransition(models.RoleEditor, models.StatusAguardandoPeca, models.StatusEmAndamento))
-	assert.False(t, isValidTransition(models.RoleEditor, models.StatusAprovado, models.StatusConcluido))
-	assert.True(t, isValidTransition(models.RoleManager, models.StatusEmAndamento, models.StatusConcluido))
+func TestIsValidTransition_AnyValidStatusForEditorAndManager(t *testing.T) {
+	assert.True(t, isValidTransition(models.RoleEditor, models.StatusAguardandoBox, models.StatusEmDiagnostico))
+	assert.True(t, isValidTransition(models.RoleEditor, models.StatusEmAndamento, models.StatusEntregue))
+	assert.True(t, isValidTransition(models.RoleManager, models.StatusEmAndamento, models.StatusLavaJato))
+	assert.False(t, isValidTransition(models.RoleEditor, models.StatusEmAndamento, models.TaskListStatus("invalido")))
 }
 

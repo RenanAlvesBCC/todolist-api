@@ -102,7 +102,7 @@ func (s *TaskListService) CreateList(userID uint, title, plate, customer string)
 		UserID:      userID,
 		WorkspaceID: wsID,
 		Position:    position,
-		Status:      models.StatusEmAndamento,
+		Status:      models.StatusAguardandoBox,
 		Items:       []models.TaskItem{},
 	}
 	if err := s.listRepo.Create(list); err != nil {
@@ -302,13 +302,6 @@ func (s *TaskListService) ReorderItems(listID, userID uint, orderedIDs []uint) e
 	return s.itemRepo.UpdatePositions(list.ID, orderedIDs)
 }
 
-// validTransitions define as transições permitidas por papel.
-var editorTransitions = map[models.TaskListStatus]map[models.TaskListStatus]bool{
-	models.StatusEmAndamento:         {models.StatusAguardandoOrcamento: true, models.StatusAguardandoPeca: true},
-	models.StatusAguardandoOrcamento: {models.StatusEmAndamento: true, models.StatusAguardandoPeca: true},
-	models.StatusAguardandoPeca:      {models.StatusEmAndamento: true, models.StatusAguardandoOrcamento: true},
-}
-
 func (s *TaskListService) ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error {
 	list, err := s.resolveList(listID, userID)
 	if err != nil {
@@ -340,10 +333,16 @@ func (s *TaskListService) getUserRole(list *models.TaskList, userID uint) (model
 	return "", errors.New("acesso negado")
 }
 
+// Editor pode ir para qualquer status válido (fluxo linear é só sugestão de UX).
+// Owner/manager também podem setar qualquer status válido.
 func isValidTransition(role models.WorkspaceRole, from, to models.TaskListStatus) bool {
-	if role == models.RoleOwner || role == models.RoleManager {
-		return true
+	if !models.IsValidTaskListStatus(to) {
+		return false
 	}
-	allowed, ok := editorTransitions[from]
-	return ok && allowed[to]
+	switch role {
+	case models.RoleOwner, models.RoleManager, models.RoleEditor:
+		return true
+	default:
+		return false
+	}
 }

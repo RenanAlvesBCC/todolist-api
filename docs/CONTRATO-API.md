@@ -110,7 +110,11 @@ Resposta:
 }
 ```
 
-Status: `em_andamento` | `aguardando_orcamento` | `aguardando_peca` | `aprovado` | `concluido`.
+Status: `aguardando_box` | `em_diagnostico` | `aguardando_orcamento` | `em_andamento` | `aguardando_peca` | `test_drive` | `lava_jato` | `aguardando_checkup` | `aguardando_retirada` | `entregue`.
+
+Default ao criar veículo: `aguardando_box`.
+
+Legado: `aprovado` → `aguardando_retirada`; `concluido` → `entregue` (migração no boot).
 
 ### POST /api/lists
 Cria veículo. Só `owner`/`manager`. Body: `{ "title": "string", "plate": "string", "customer": "string" }`. `plate` e `customer` opcionais (default `""`). Placa é normalizada (trim + maiúsculas), sem validação de formato. 201.
@@ -129,8 +133,7 @@ Body: `{ "ids": [3,1,2] }`. Só `owner`/`manager`. 204.
 
 ### PUT /api/lists/:id/status
 Body: `{ "status": "aguardando_peca" }`.
-- `editor`: só entre `em_andamento`, `aguardando_orcamento`, `aguardando_peca`.
-- `owner`/`manager`: qualquer transição.
+- `editor`, `owner` e `manager`: qualquer status válido da lista acima (fluxo linear é só sugestão de UI).
 
 ## Serviços
 

@@ -598,6 +598,6 @@ func TestTaskListHandler_ChangeStatus_ForbiddenReturns403(t *testing.T) {
 			return errors.New("transição de status não permitida para seu papel")
 		},
 	})
-	rec := jsonRequest(router, http.MethodPut, "/api/lists/1/status", map[string]string{"status": "aprovado"})
+	rec := jsonRequest(router, http.MethodPut, "/api/lists/1/status", map[string]string{"status": "entregue"})
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
