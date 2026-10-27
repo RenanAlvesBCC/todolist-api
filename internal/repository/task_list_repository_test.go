@@ -70,6 +70,60 @@ func TestTaskListRepository_FindAllByUser_SearchMatchesPlateOrCustomer(t *testin
 	assert.Equal(t, "Civic", byCustomer[0].Title)
 }
 
+func TestTaskListRepository_FindAll_SearchIgnoresCase(t *testing.T) {
+	db := setupTestDB(t)
+	// Reproduz o LIKE do Postgres (produção), que diferencia maiúsculas; o do SQLite não.
+	require.NoError(t, db.Exec("PRAGMA case_sensitive_like = ON").Error)
+	repo := NewTaskListRepository(db)
+
+	require.NoError(t, repo.Create(&models.TaskList{Title: "TORO BRANCA", Plate: "ABC1D23", Customer: "Maria Souza", UserID: 1}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "TORO CINZA", Plate: "XYZ9A87", Customer: "Carlos Lima", UserID: 1}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "Gol", Plate: "QWE0F00", Customer: "Pedro", UserID: 1}))
+
+	cases := []struct {
+		name   string
+		search []string
+		titles []string
+	}{
+		{"título", []string{"toro", "TORO", "Toro", "tOrO"}, []string{"TORO BRANCA", "TORO CINZA"}},
+		{"placa", []string{"abc1", "ABC1", "Abc1d23"}, []string{"TORO BRANCA"}},
+		{"cliente", []string{"carlos", "CARLOS", "cArLoS lImA"}, []string{"TORO CINZA"}},
+	}
+
+	for _, tc := range cases {
+		for _, search := range tc.search {
+			t.Run(tc.name+"/"+search, func(t *testing.T) {
+				lists, total, err := repo.FindAll(1, nil, TaskListFilter{Search: search, Page: 1, Limit: 10})
+				require.NoError(t, err)
+				assert.Equal(t, int64(len(tc.titles)), total)
+				titles := make([]string, 0, len(lists))
+				for _, l := range lists {
+					titles = append(titles, l.Title)
+				}
+				assert.ElementsMatch(t, tc.titles, titles)
+			})
+		}
+	}
+}
+
+func TestTaskListRepository_FindAll_SearchKeepsWorkspaceScope(t *testing.T) {
+	db := setupTestDB(t)
+	require.NoError(t, db.Exec("PRAGMA case_sensitive_like = ON").Error)
+	repo := NewTaskListRepository(db)
+
+	wsID := uint(10)
+	otherWS := uint(20)
+	require.NoError(t, repo.Create(&models.TaskList{Title: "TORO BRANCA", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEmAndamento}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "TORO CINZA", UserID: 1, WorkspaceID: &wsID, Status: models.StatusEntregue}))
+	require.NoError(t, repo.Create(&models.TaskList{Title: "TORO PRETA", UserID: 2, WorkspaceID: &otherWS}))
+
+	lists, total, err := repo.FindAll(1, &wsID, TaskListFilter{Search: "toro", Status: string(models.StatusEntregue), Page: 1, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, lists, 1)
+	assert.Equal(t, "TORO CINZA", lists[0].Title)
+}
+
 func TestTaskListRepository_FindAllByUser_PreloadsItems(t *testing.T) {
 	db := setupTestDB(t)
 	listRepo := NewTaskListRepository(db)

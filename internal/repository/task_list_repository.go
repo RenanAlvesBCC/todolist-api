@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 
 	"github.com/RenanAlvesBCC/oficina-api/internal/models"
@@ -77,8 +79,12 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 	}
 
 	if filter.Search != "" {
-		like := "%" + filter.Search + "%"
-		query = query.Where("title LIKE ? OR plate LIKE ? OR customer LIKE ?", like, like, like)
+		// LIKE no Postgres diferencia maiúsculas (no SQLite não); comparamos os dois lados em minúsculas.
+		like := "%" + strings.ToLower(filter.Search) + "%"
+		query = query.Where(
+			"(LOWER(title) LIKE ? OR LOWER(plate) LIKE ? OR LOWER(customer) LIKE ?)",
+			like, like, like,
+		)
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
