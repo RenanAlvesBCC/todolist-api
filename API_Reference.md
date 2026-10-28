@@ -187,6 +187,7 @@ Atualiza a ordem dos itens dentro de uma lista específica.
   "DeletedAt": null,
   "title": "Compras da semana",
   "user_id": 1,
+  "delivered_at": null,
   "items": [
     {
       "ID": 10,

@@ -290,6 +290,19 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/items/{{addItem2.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
 
+### Marcar como entregue (grava delivered_at)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/status
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "entregue"
+}
+
+### Ver veiculo entregue (delivered_at preenchido)
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
 ### Excluir veiculo
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}

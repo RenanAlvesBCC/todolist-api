@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/RenanAlvesBCC/oficina-api/internal/models"
 	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
@@ -317,8 +318,21 @@ func (s *TaskListService) ChangeStatus(listID, userID uint, newStatus models.Tas
 		return errors.New("transição de status não permitida para seu papel")
 	}
 
-	list.Status = newStatus
+	applyStatus(list, newStatus, time.Now().UTC())
 	return s.listRepo.Update(list)
+}
+
+// applyStatus troca o status e mantém delivered_at coerente: grava o instante
+// da primeira entrada em entregue (sem sobrescrever) e limpa ao sair dele.
+func applyStatus(list *models.TaskList, newStatus models.TaskListStatus, now time.Time) {
+	if newStatus == models.StatusEntregue {
+		if list.Status != models.StatusEntregue || list.DeliveredAt == nil {
+			list.DeliveredAt = &now
+		}
+	} else {
+		list.DeliveredAt = nil
+	}
+	list.Status = newStatus
 }
 
 // getUserRole retorna o papel do usuário em relação à lista.

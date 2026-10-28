@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type TaskListStatus string
 
 const (
@@ -47,6 +49,7 @@ type TaskList struct {
 	WorkspaceID *uint            `json:"workspace_id"`
 	Status      TaskListStatus   `gorm:"not null;default:'aguardando_box'" json:"status"`
 	Position    int              `gorm:"not null;default:0" json:"position"`
+	DeliveredAt *time.Time       `gorm:"index" json:"delivered_at"`
 	Items       []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`
 	Assignments []ListAssignment `gorm:"foreignKey:TaskListID" json:"assignments,omitempty"`
 }

@@ -134,6 +134,7 @@ Body: `{ "ids": [3,1,2] }`. Só `owner`/`manager`. 204.
 ### PUT /api/lists/:id/status
 Body: `{ "status": "aguardando_peca" }`.
 - `editor`, `owner` e `manager`: qualquer status válido da lista acima (fluxo linear é só sugestão de UI).
+- Ao entrar em `entregue`, a API grava `delivered_at` (UTC). Reenviar `entregue` mantém a data original; sair de `entregue` limpa `delivered_at` (`null`).
 
 ## Serviços
 
@@ -197,7 +198,14 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `items[]`, `assignments[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`.
+
+`delivered_at`: data/hora da entrega (RFC3339, UTC) quando `status = entregue`; `null` nos demais status. Veículos já entregues antes do campo existir recebem `updated_at` como estimativa (backfill no boot).
+
+```json
+{ "id": 7, "status": "entregue", "delivered_at": "2026-10-27T18:45:00Z", "updated_at": "2026-10-27T18:45:00Z" }
+{ "id": 8, "status": "em_andamento", "delivered_at": null, "updated_at": "2026-10-28T09:10:00Z" }
+```
 
 IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags maiúsculas em algum campo; clientes devem decodificar de forma tolerante.
 

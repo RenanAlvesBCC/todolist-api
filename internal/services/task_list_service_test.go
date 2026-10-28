@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -592,3 +593,85 @@ func TestIsValidTransition_AnyValidStatusForEditorAndManager(t *testing.T) {
 	assert.False(t, isValidTransition(models.RoleEditor, models.StatusEmAndamento, models.TaskListStatus("invalido")))
 }
 
+func changeStatusCapturing(t *testing.T, current *models.TaskList, newStatus models.TaskListStatus) *models.TaskList {
+	t.Helper()
+	var saved *models.TaskList
+	store := &mockTaskListStore{
+		findByIDFunc: func(id uint) (*models.TaskList, error) { return current, nil },
+		updateFunc:   func(list *models.TaskList) error { saved = list; return nil },
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
+	require.NoError(t, svc.ChangeStatus(current.ID, current.UserID, newStatus))
+	require.NotNil(t, saved)
+	return saved
+}
+
+func TestTaskListService_ChangeStatus_SetsDeliveredAtOnEntregue(t *testing.T) {
+	before := time.Now().UTC()
+	saved := changeStatusCapturing(t, &models.TaskList{Base: models.Base{ID: 1}, UserID: 1, Status: models.StatusAguardandoRetirada}, models.StatusEntregue)
+
+	assert.Equal(t, models.StatusEntregue, saved.Status)
+	require.NotNil(t, saved.DeliveredAt)
+	assert.Equal(t, time.UTC, saved.DeliveredAt.Location())
+	assert.False(t, saved.DeliveredAt.Before(before))
+}
+
+func TestTaskListService_ChangeStatus_KeepsDeliveredAtWhenAlreadyEntregue(t *testing.T) {
+	original := time.Date(2026, 10, 1, 12, 30, 0, 0, time.UTC)
+	saved := changeStatusCapturing(t, &models.TaskList{Base: models.Base{ID: 1}, UserID: 1, Status: models.StatusEntregue, DeliveredAt: &original}, models.StatusEntregue)
+
+	require.NotNil(t, saved.DeliveredAt)
+	assert.True(t, original.Equal(*saved.DeliveredAt))
+}
+
+func TestTaskListService_ChangeStatus_ClearsDeliveredAtWhenLeavingEntregue(t *testing.T) {
+	original := time.Date(2026, 10, 1, 12, 30, 0, 0, time.UTC)
+	saved := changeStatusCapturing(t, &models.TaskList{Base: models.Base{ID: 1}, UserID: 1, Status: models.StatusEntregue, DeliveredAt: &original}, models.StatusLavaJato)
+
+	assert.Equal(t, models.StatusLavaJato, saved.Status)
+	assert.Nil(t, saved.DeliveredAt)
+}
+
+func TestApplyStatus_DeliveredAtRules(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	stale := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	list := &models.TaskList{Status: models.StatusEntregue}
+	applyStatus(list, models.StatusEntregue, now)
+	require.NotNil(t, list.DeliveredAt, "entregue sem data recebe o instante atual")
+	assert.True(t, now.Equal(*list.DeliveredAt))
+
+	list = &models.TaskList{Status: models.StatusEmAndamento, DeliveredAt: &stale}
+	applyStatus(list, models.StatusEntregue, now)
+	assert.True(t, now.Equal(*list.DeliveredAt), "nova entrega substitui valor residual")
+
+	list = &models.TaskList{Status: models.StatusEmAndamento}
+	applyStatus(list, models.StatusTestDrive, now)
+	assert.Nil(t, list.DeliveredAt)
+	assert.Equal(t, models.StatusTestDrive, list.Status)
+}
+
+func TestTaskListService_ChangeStatus_PersistsDeliveredAt(t *testing.T) {
+	db := setupTestDB(t)
+	repo := repository.NewTaskListRepository(db)
+	list := &models.TaskList{Title: "Gol", UserID: 1, Status: models.StatusAguardandoRetirada}
+	require.NoError(t, repo.Create(list))
+	svc := NewTaskListService(repo, repository.NewTaskItemRepository(db), nil)
+
+	require.NoError(t, svc.ChangeStatus(list.ID, 1, models.StatusEntregue))
+	got, err := repo.FindByID(list.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.DeliveredAt)
+	first := *got.DeliveredAt
+
+	require.NoError(t, svc.ChangeStatus(list.ID, 1, models.StatusEntregue))
+	got, err = repo.FindByID(list.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.DeliveredAt)
+	assert.True(t, first.Equal(*got.DeliveredAt))
+
+	require.NoError(t, svc.ChangeStatus(list.ID, 1, models.StatusEmAndamento))
+	got, err = repo.FindByID(list.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got.DeliveredAt)
+}

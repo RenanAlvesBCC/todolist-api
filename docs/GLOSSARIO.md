@@ -35,6 +35,8 @@ Fluxo linear é sugestão de UI; mecânico e gerente podem setar qualquer status
 
 Legado (migrado no boot): `aprovado` → `aguardando_retirada`; `concluido` → `entregue`.
 
+Data de entrega: `delivered_at` no veículo, preenchido ao entrar em `entregue` e limpo ao sair.
+
 ## Tipos de pendência
 
 `aguardando_ml`, `procurando_peca`, `aguardando_cliente`, `aguardando_orcamento`, `aguardando_entrega`, `aguardando_retirada`, `aguardando_terceiro`, `outro`.

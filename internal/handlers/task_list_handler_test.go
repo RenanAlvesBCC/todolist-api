@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -600,4 +601,41 @@ func TestTaskListHandler_ChangeStatus_ForbiddenReturns403(t *testing.T) {
 	})
 	rec := jsonRequest(router, http.MethodPut, "/api/lists/1/status", map[string]string{"status": "entregue"})
 	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestTaskListHandler_Get_SerializesDeliveredAt(t *testing.T) {
+	delivered := time.Date(2026, 10, 27, 18, 45, 0, 0, time.UTC)
+	router := setupRouter(&mockTaskListProvider{
+		getListFunc: func(listID, userID uint) (*models.TaskList, error) {
+			return &models.TaskList{Title: "Gol", UserID: userID, Status: models.StatusEntregue, DeliveredAt: &delivered}, nil
+		},
+	})
+	rec := jsonRequest(router, http.MethodGet, "/api/lists/3", nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "2026-10-27T18:45:00Z", body["delivered_at"])
+}
+
+func TestTaskListHandler_List_SerializesNullDeliveredAt(t *testing.T) {
+	router := setupRouter(&mockTaskListProvider{
+		listAllFunc: func(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error) {
+			return &services.PaginatedTaskLists{
+				Lists: []models.TaskList{{Title: "Fusca", UserID: userID, Status: models.StatusEmAndamento}},
+				Page:  page, Limit: limit, Total: 1, TotalPages: 1,
+			}, nil
+		},
+	})
+	rec := jsonRequest(router, http.MethodGet, "/api/lists", nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct {
+		Lists []map[string]interface{} `json:"lists"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Lists, 1)
+	value, present := body.Lists[0]["delivered_at"]
+	assert.True(t, present)
+	assert.Nil(t, value)
 }
