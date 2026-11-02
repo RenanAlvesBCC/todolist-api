@@ -40,3 +40,15 @@ func checkVehicleAccess(list *models.TaskList, userID uint, wsStore WorkspaceCon
 	}
 	return ErrNotFound
 }
+
+// vehicleRole retorna o papel do usuário em relação ao veículo.
+// Em veículo pessoal (sem workspace), quem criou recebe owner implícito.
+func vehicleRole(list *models.TaskList, userID uint, wsStore WorkspaceContextStore) (models.WorkspaceRole, error) {
+	if list.WorkspaceID != nil && wsStore != nil {
+		return wsStore.GetMemberRole(*list.WorkspaceID, userID)
+	}
+	if list.UserID == userID {
+		return models.RoleOwner, nil
+	}
+	return "", errors.New("acesso negado")
+}

@@ -30,6 +30,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.ListAssignment{},
 		&models.QuoteItem{},
 		&models.PendingFlag{},
+		&models.VehicleNote{},
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
 	)

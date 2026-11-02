@@ -77,6 +77,20 @@ func TestCheckVehicleAccess_NoWorkspaceNonOwner(t *testing.T) {
 	assert.ErrorIs(t, checkVehicleAccess(list, 2, nil), ErrNotFound)
 }
 
+func TestVehicleRole(t *testing.T) {
+	wsID := uint(10)
+	role, err := vehicleRole(&models.TaskList{UserID: 1, WorkspaceID: &wsID}, 2, &mockAccessStore{role: models.RoleManager})
+	assert.NoError(t, err)
+	assert.Equal(t, models.RoleManager, role)
+
+	role, err = vehicleRole(&models.TaskList{UserID: 1}, 1, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, models.RoleOwner, role)
+
+	_, err = vehicleRole(&models.TaskList{UserID: 1}, 2, nil)
+	assert.Error(t, err)
+}
+
 func TestIsAssigned(t *testing.T) {
 	list := &models.TaskList{Assignments: []models.ListAssignment{{UserID: 5}, {UserID: 8}}}
 	assert.True(t, isAssigned(list, 5))

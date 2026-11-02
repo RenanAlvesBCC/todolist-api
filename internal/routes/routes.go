@@ -17,6 +17,7 @@ func SetupRoutes(
 	flagHandler *handlers.PendingFlagHandler,
 	assignmentHandler *handlers.AssignmentHandler,
 	auditHandler *handlers.AuditHandler,
+	noteHandler *handlers.VehicleNoteHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.CORS())
@@ -79,5 +80,10 @@ func SetupRoutes(
 		protected.POST("/lists/:id/flags", flagHandler.Add)
 		protected.PATCH("/lists/:id/flags/:flagId/resolve", flagHandler.Resolve)
 		protected.GET("/lists/:id/flags", flagHandler.List)
+
+		// Informações importantes (exclusão lógica)
+		protected.GET("/lists/:id/notes", noteHandler.List)
+		protected.POST("/lists/:id/notes", noteHandler.Add)
+		protected.DELETE("/lists/:id/notes/:noteId", noteHandler.Delete)
 	}
 }

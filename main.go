@@ -35,6 +35,7 @@ func main() {
 	quoteRepo := repository.NewQuoteRepository(database.DB)
 	flagRepo := repository.NewPendingFlagRepository(database.DB)
 	assignRepo := repository.NewListAssignmentRepository(database.DB)
+	noteRepo := repository.NewVehicleNoteRepository(database.DB)
 
 	// Limpeza periódica de tokens expirados em background
 	utils.StartTokenCleanup(secRepo)
@@ -47,6 +48,7 @@ func main() {
 	flagService := services.NewPendingFlagService(flagRepo, listRepo, wsRepo)
 	assignService := services.NewAssignmentService(assignRepo, wsRepo, listRepo)
 	auditService := services.NewAuditService(secRepo, wsRepo)
+	noteService := services.NewVehicleNoteService(noteRepo, listRepo, wsRepo)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, secRepo)
@@ -56,9 +58,10 @@ func main() {
 	flagHandler := handlers.NewPendingFlagHandler(flagService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignService)
 	auditHandler := handlers.NewAuditHandler(auditService)
+	noteHandler := handlers.NewVehicleNoteHandler(noteService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, secRepo)
+	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, noteHandler, secRepo)
 
 	port := os.Getenv("PORT")
 	if port == "" {

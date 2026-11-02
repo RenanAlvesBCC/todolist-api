@@ -335,16 +335,8 @@ func applyStatus(list *models.TaskList, newStatus models.TaskListStatus, now tim
 	list.Status = newStatus
 }
 
-// getUserRole retorna o papel do usuário em relação à lista.
-// Para listas pessoais, o dono recebe papel owner implícito.
 func (s *TaskListService) getUserRole(list *models.TaskList, userID uint) (models.WorkspaceRole, error) {
-	if list.WorkspaceID != nil && s.wsStore != nil {
-		return s.wsStore.GetMemberRole(*list.WorkspaceID, userID)
-	}
-	if list.UserID == userID {
-		return models.RoleOwner, nil
-	}
-	return "", errors.New("acesso negado")
+	return vehicleRole(list, userID, s.wsStore)
 }
 
 // Editor pode ir para qualquer status válido (fluxo linear é só sugestão de UX).

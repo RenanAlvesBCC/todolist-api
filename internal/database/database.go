@@ -29,6 +29,7 @@ func Connect() {
 		&models.ListAssignment{},
 		&models.QuoteItem{},
 		&models.PendingFlag{},
+		&models.VehicleNote{},
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
 	); err != nil {

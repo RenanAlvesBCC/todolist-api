@@ -15,6 +15,8 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Mecânico atribuído | `ListAssignment`, `/assignments` |
 | Linha de orçamento | `QuoteItem`, `/quotes` |
 | Pendência | `PendingFlag`, `/flags` |
+| Informação importante (nota do veículo, com data/hora e autor) | `VehicleNote`, `/notes` |
+| Exclusão lógica (some da tela, fica no histórico) | `deleted_at` + `deleted_by` |
 | Esteira do mecânico | `GET /api/lists?mine=true` (editor sempre filtrado) |
 | Pátio (visão gerente) | `GET /api/lists` sem `mine` |
 

@@ -269,6 +269,33 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 PATCH {{baseUrl}}/api/lists/{{createList.response.body.id}}/flags/{{addFlag.response.body.id}}/resolve
 Authorization: Bearer {{loginOwner.response.body.token}}
 
+### Adicionar informacao importante
+# @name addNote
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/notes
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "Cliente pediu para ligar antes de trocar a correia.\nPrefere WhatsApp."
+}
+
+### Informacao importante vazia (400)
+POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/notes
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "text": "   "
+}
+
+### Listar informacoes importantes (mais recente primeiro)
+GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/notes
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Excluir informacao importante (exclusao logica)
+DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/notes/{{addNote.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
 ### Atribuir mecanico
 POST {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
 Authorization: Bearer {{loginOwner.response.body.token}}

@@ -170,6 +170,46 @@ Mecânico pode CRUD de serviços **nos veículos da esteira**.
 - GET `/api/lists/:id/flags`
 - PATCH `/api/lists/:id/flags/:flagId/resolve`
 
+## Informações importantes
+
+Histórico de observações livres do veículo, com data/hora e autor. Mesma regra de acesso de serviços/orçamentos/pendências: `owner`/`manager` em qualquer veículo da oficina; `editor` só nos veículos da esteira (atribuído). Sem acesso ou veículo de outra oficina → 404.
+
+### GET /api/lists/:id/notes
+200 com array das informações **ativas** (não excluídas), da mais recente para a mais antiga.
+
+```json
+[
+  {
+    "id": 12,
+    "task_list_id": 7,
+    "author_id": 3,
+    "author_name": "Ana Silva",
+    "text": "Cliente pediu para ligar antes de trocar a correia.\nPrefere WhatsApp.",
+    "created_at": "2026-11-02T18:30:00Z"
+  }
+]
+```
+
+`author_name` = `first_name last_name` (trim); se vazio, `username` (e-mail).
+
+### POST /api/lists/:id/notes
+Body: `{ "text": "string" }`. Todos os papéis com acesso ao veículo (incluindo mecânico).
+
+- O texto é salvo com trim (quebras de linha internas são mantidas).
+- 201 com a informação criada (mesmo formato do GET).
+- 400 `{ "error": "texto é obrigatório" }` (vazio ou só espaços)
+- 400 `{ "error": "texto deve ter no máximo 1000 caracteres" }` (contagem em caracteres Unicode)
+- 404 veículo não encontrado / sem acesso
+
+### DELETE /api/lists/:id/notes/:noteId
+Exclusão **lógica**: some das respostas, mas a linha fica no banco com `deleted_at` e `deleted_by` (não expostos no JSON).
+
+- `owner`/`manager`: excluem qualquer informação do veículo.
+- Autor (qualquer papel, inclusive mecânico): exclui as próprias.
+- 204 excluída
+- 403 `{ "error": "apenas gerentes ou o autor podem excluir esta informação" }`
+- 404 `{ "error": "informação não encontrada" }` (já excluída, inexistente ou de outro veículo)
+
 ## Auditoria (owner/manager)
 
 ### GET /api/audit
@@ -212,5 +252,5 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 ## Erros comuns
 
 - 401 token ausente, inválido ou na blacklist
-- 403 transição de status ou mutação de pátio negada ao mecânico
+- 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)
