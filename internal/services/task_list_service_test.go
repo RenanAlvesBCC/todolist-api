@@ -170,6 +170,8 @@ func TestTaskListService_CreateList_Success(t *testing.T) {
 	assert.Equal(t, models.StatusAguardandoBox, list.Status)
 	assert.Equal(t, "", list.Plate)
 	assert.Equal(t, "", list.Customer)
+	assert.NotNil(t, list.Notes)
+	assert.Empty(t, list.Notes)
 }
 
 func TestTaskListService_CreateList_NormalizesPlateAndCustomer(t *testing.T) {

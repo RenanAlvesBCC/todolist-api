@@ -44,6 +44,7 @@ func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter Task
 	if err := r.buildQuery(userID, workspaceID, filter).
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Preload("Assignments").
+		Preload("Notes", notesWithAuthorNewestFirst).
 		Order("position asc").
 		Offset(offset).Limit(filter.Limit).
 		Find(&lists).Error; err != nil {
@@ -98,6 +99,7 @@ func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList,
 	if err := r.db.
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Preload("Assignments").
+		Preload("Notes", notesWithAuthorNewestFirst).
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&list).Error; err != nil {
 		return nil, err
@@ -111,14 +113,16 @@ func (r *TaskListRepository) FindByID(id uint) (*models.TaskList, error) {
 	if err := r.db.
 		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
 		Preload("Assignments").
+		Preload("Notes", notesWithAuthorNewestFirst).
 		First(&list, id).Error; err != nil {
 		return nil, err
 	}
 	return &list, nil
 }
 
+// Update não regrava Notes: informações importantes têm ciclo próprio (inclusive exclusão lógica).
 func (r *TaskListRepository) Update(list *models.TaskList) error {
-	return r.db.Save(list).Error
+	return r.db.Omit("Notes").Save(list).Error
 }
 
 func (r *TaskListRepository) Delete(list *models.TaskList) error {

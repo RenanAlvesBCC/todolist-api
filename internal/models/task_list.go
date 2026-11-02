@@ -52,4 +52,5 @@ type TaskList struct {
 	DeliveredAt *time.Time       `gorm:"index" json:"delivered_at"`
 	Items       []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`
 	Assignments []ListAssignment `gorm:"foreignKey:TaskListID" json:"assignments,omitempty"`
+	Notes       []VehicleNote    `gorm:"foreignKey:TaskListID" json:"notes"`
 }

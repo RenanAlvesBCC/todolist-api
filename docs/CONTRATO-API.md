@@ -238,7 +238,9 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
+
+`notes`: informações importantes **ativas** do veículo, da mais recente para a mais antiga, no mesmo formato de `GET /api/lists/:id/notes`. Vem em `GET /api/lists`, `GET /api/lists/:id`, `PUT /api/lists/:id` e `POST /api/lists` (`[]`). Campo aditivo: clientes devem tratar ausência (API antiga) como lista vazia.
 
 `delivered_at`: data/hora da entrega (RFC3339, UTC) quando `status = entregue`; `null` nos demais status. Veículos já entregues antes do campo existir recebem `updated_at` como estimativa (backfill no boot).
 

@@ -167,6 +167,27 @@ func TestVehicleNoteService_ListNotes_NewestFirstWithoutDeleted(t *testing.T) {
 	assert.Equal(t, first.ID, notes[1].ID)
 }
 
+func TestVehicleNoteService_DeletedNoteHiddenFromVehicle(t *testing.T) {
+	f := newNoteFixture(t)
+	kept := f.add(t, f.owner, "fica")
+	removed := f.add(t, f.editorAssigned, "sai")
+	require.NoError(t, f.svc.DeleteNote(f.vehicle, removed.ID, f.editorAssigned))
+
+	lists := NewTaskListService(f.lists, repository.NewTaskItemRepository(f.db), repository.NewWorkspaceRepository(f.db))
+	vehicle, err := lists.GetList(f.vehicle, f.editorAssigned)
+	require.NoError(t, err)
+	require.Len(t, vehicle.Notes, 1)
+	assert.Equal(t, kept.ID, vehicle.Notes[0].ID)
+
+	page, err := lists.ListAll(f.owner, "", 1, 20, "", false)
+	require.NoError(t, err)
+	for _, v := range page.Lists {
+		for _, n := range v.Notes {
+			assert.NotEqual(t, removed.ID, n.ID)
+		}
+	}
+}
+
 func TestVehicleNoteService_DeleteNote_ManagersDeleteAny(t *testing.T) {
 	f := newNoteFixture(t)
 

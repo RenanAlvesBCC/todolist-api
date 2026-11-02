@@ -105,6 +105,7 @@ func (s *TaskListService) CreateList(userID uint, title, plate, customer string)
 		Position:    position,
 		Status:      models.StatusAguardandoBox,
 		Items:       []models.TaskItem{},
+		Notes:       []models.VehicleNote{},
 	}
 	if err := s.listRepo.Create(list); err != nil {
 		return nil, err
