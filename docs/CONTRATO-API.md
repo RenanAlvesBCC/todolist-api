@@ -129,7 +129,14 @@ Ficha (`title`, `plate`, `customer`). Só `owner`/`manager`. Substitui os três 
 Remove veículo e serviços. Só `owner`/`manager`.
 
 ### PUT /api/lists/reorder
-Body: `{ "ids": [3,1,2] }`. Só `owner`/`manager`. 204.
+Body: `{ "ids": [3,1,2] }`. Só `owner`/`manager` (mecânico → 403). 204.
+
+- Aceita o pátio inteiro **ou um subconjunto** (ex.: só os não entregues exibidos no pátio). Os ids enviados passam a ocupar, na ordem pedida, as mesmas vagas que já ocupavam; veículos fora do body não mudam de lugar.
+- Vale para qualquer veículo da oficina, independente de quem o criou.
+- Ids de outra oficina, inexistentes ou repetidos são ignorados (sem erro).
+- Após a chamada, o pátio fica numerado `0..n-1` sem empates (`position`).
+
+Ordenação de `GET /api/lists`: `position` asc, desempate por `id` asc. Novo veículo entra com `position` = maior posição do pátio + 1 (fim da fila).
 
 ### PUT /api/lists/:id/status
 Body: `{ "status": "aguardando_peca" }`.

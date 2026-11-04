@@ -158,7 +158,7 @@ func TestTaskListRepository_NextPosition(t *testing.T) {
 
 	require.NoError(t, repo.Create(&models.TaskList{Title: "Compras", UserID: 1}))
 
-	position, err := repo.NextPosition(1)
+	position, err := repo.NextPosition(1, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, position)
 }
@@ -172,7 +172,7 @@ func TestTaskListRepository_UpdatePositions_ReordersOnlyOwnedLists(t *testing.T)
 	require.NoError(t, repo.Create(a))
 	require.NoError(t, repo.Create(b))
 
-	require.NoError(t, repo.UpdatePositions(1, []uint{b.ID, a.ID}))
+	require.NoError(t, repo.UpdatePositions(1, nil, []uint{b.ID, a.ID}))
 
 	lists, _, err := repo.FindAll(1, nil, TaskListFilter{Page: 1, Limit: 10})
 	require.NoError(t, err)

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"strings"
 
 	"gorm.io/gorm"
@@ -46,6 +47,7 @@ func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter Task
 		Preload("Assignments").
 		Preload("Notes", notesWithAuthorNewestFirst).
 		Order("position asc").
+		Order("id asc").
 		Offset(offset).Limit(filter.Limit).
 		Find(&lists).Error; err != nil {
 		return nil, 0, err
@@ -70,13 +72,8 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 		} else {
 			query = r.db.Model(&models.TaskList{}).Where("id IN (?)", sub)
 		}
-	} else if workspaceID != nil {
-		query = r.db.Model(&models.TaskList{}).Where(
-			"(workspace_id = ?) OR (user_id = ? AND workspace_id IS NULL)",
-			*workspaceID, userID,
-		)
 	} else {
-		query = r.db.Model(&models.TaskList{}).Where("user_id = ? AND workspace_id IS NULL", userID)
+		query = yardQuery(r.db, userID, workspaceID)
 	}
 
 	if filter.Search != "" {
@@ -129,24 +126,101 @@ func (r *TaskListRepository) Delete(list *models.TaskList) error {
 	return r.db.Delete(list).Error
 }
 
-func (r *TaskListRepository) NextPosition(userID uint) (int, error) {
-	var count int64
-	if err := r.db.Model(&models.TaskList{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-		return 0, err
+// yardQuery é o pátio do usuário: todos os veículos da oficina e os pessoais legados
+// (sem workspace_id) que ele criou. Sem oficina, só os pessoais.
+func yardQuery(db *gorm.DB, userID uint, workspaceID *uint) *gorm.DB {
+	if workspaceID != nil {
+		return db.Model(&models.TaskList{}).Where(
+			"(workspace_id = ?) OR (user_id = ? AND workspace_id IS NULL)",
+			*workspaceID, userID,
+		)
 	}
-	return int(count), nil
+	return db.Model(&models.TaskList{}).Where("user_id = ? AND workspace_id IS NULL", userID)
 }
 
-func (r *TaskListRepository) UpdatePositions(userID uint, orderedIDs []uint) error {
+// NextPosition devolve a posição logo após o último veículo do pátio, independente de quem o criou.
+func (r *TaskListRepository) NextPosition(userID uint, workspaceID *uint) (int, error) {
+	var maxPosition sql.NullInt64
+	if err := yardQuery(r.db, userID, workspaceID).
+		Select("MAX(position)").
+		Row().Scan(&maxPosition); err != nil {
+		return 0, err
+	}
+	if !maxPosition.Valid {
+		return 0, nil
+	}
+	return int(maxPosition.Int64) + 1, nil
+}
+
+// UpdatePositions aceita o pátio inteiro ou um subconjunto (ex.: só os não entregues).
+// Os ids pedidos ocupam, na nova ordem, as mesmas vagas que já ocupavam na ordem atual;
+// os demais veículos não mudam de lugar. Ao final o pátio fica numerado 0..n-1, sem empates.
+// Ids fora do pátio do usuário são ignorados.
+func (r *TaskListRepository) UpdatePositions(userID uint, workspaceID *uint, orderedIDs []uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		for index, id := range orderedIDs {
-			result := tx.Model(&models.TaskList{}).
-				Where("id = ? AND user_id = ?", id, userID).
-				Update("position", index)
-			if result.Error != nil {
-				return result.Error
+		var current []models.TaskList
+		if err := yardQuery(tx, userID, workspaceID).
+			Select("id", "position").
+			Order("position asc").
+			Order("id asc").
+			Find(&current).Error; err != nil {
+			return err
+		}
+
+		currentIDs := make([]uint, len(current))
+		oldPosition := make(map[uint]int, len(current))
+		for i, l := range current {
+			currentIDs[i] = l.ID
+			oldPosition[l.ID] = l.Position
+		}
+		requested := make(map[uint]bool, len(orderedIDs))
+		for _, id := range orderedIDs {
+			requested[id] = true
+		}
+
+		for index, id := range mergeOrder(currentIDs, orderedIDs) {
+			if oldPosition[id] == index {
+				continue
+			}
+			update := tx.Model(&models.TaskList{}).Where("id = ?", id)
+			var err error
+			if requested[id] {
+				err = update.Update("position", index).Error
+			} else {
+				// Só renumeração de dados antigos (empates/buracos): não conta como edição do veículo.
+				err = update.UpdateColumn("position", index).Error
+			}
+			if err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+// mergeOrder coloca os ids pedidos (conhecidos, sem repetição) nas vagas que eles já
+// ocupavam em current, na ordem pedida; os outros ids continuam onde estavam.
+func mergeOrder(current, requested []uint) []uint {
+	known := make(map[uint]bool, len(current))
+	for _, id := range current {
+		known[id] = true
+	}
+	picked := make([]uint, 0, len(requested))
+	seen := make(map[uint]bool, len(requested))
+	for _, id := range requested {
+		if known[id] && !seen[id] {
+			seen[id] = true
+			picked = append(picked, id)
+		}
+	}
+
+	result := append([]uint(nil), current...)
+	next := 0
+	for i, id := range result {
+		if seen[id] {
+			result[i] = picked[next]
+			next++
+		}
+	}
+	return result
 }

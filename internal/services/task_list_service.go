@@ -18,8 +18,8 @@ type TaskListStore interface {
 	FindByID(id uint) (*models.TaskList, error)
 	Update(list *models.TaskList) error
 	Delete(list *models.TaskList) error
-	NextPosition(userID uint) (int, error)
-	UpdatePositions(userID uint, orderedIDs []uint) error
+	NextPosition(userID uint, workspaceID *uint) (int, error)
+	UpdatePositions(userID uint, workspaceID *uint, orderedIDs []uint) error
 }
 
 type TaskItemStore interface {
@@ -67,6 +67,19 @@ func (s *TaskListService) requireManager(userID uint) error {
 	return nil
 }
 
+// workspaceID é a oficina do usuário, ou nil se ele não participa de nenhuma.
+func (s *TaskListService) workspaceID(userID uint) *uint {
+	if s.wsStore == nil {
+		return nil
+	}
+	ws, err := s.wsStore.FindByMemberUserID(userID)
+	if err != nil {
+		return nil
+	}
+	id := ws.ID
+	return &id
+}
+
 func normalizePlate(plate string) string {
 	return strings.ToUpper(strings.TrimSpace(plate))
 }
@@ -83,17 +96,10 @@ func (s *TaskListService) CreateList(userID uint, title, plate, customer string)
 		return nil, err
 	}
 
-	position, err := s.listRepo.NextPosition(userID)
+	wsID := s.workspaceID(userID)
+	position, err := s.listRepo.NextPosition(userID, wsID)
 	if err != nil {
 		return nil, err
-	}
-
-	var wsID *uint
-	if s.wsStore != nil {
-		if ws, err := s.wsStore.FindByMemberUserID(userID); err == nil {
-			id := ws.ID
-			wsID = &id
-		}
 	}
 
 	list := &models.TaskList{
@@ -290,7 +296,7 @@ func (s *TaskListService) ReorderLists(userID uint, orderedIDs []uint) error {
 	if len(orderedIDs) == 0 {
 		return errors.New("lista de ids vazia")
 	}
-	return s.listRepo.UpdatePositions(userID, orderedIDs)
+	return s.listRepo.UpdatePositions(userID, s.workspaceID(userID), orderedIDs)
 }
 
 func (s *TaskListService) ReorderItems(listID, userID uint, orderedIDs []uint) error {

@@ -21,8 +21,8 @@ type mockTaskListStore struct {
 	createFunc          func(list *models.TaskList) error
 	updateFunc          func(list *models.TaskList) error
 	deleteFunc          func(list *models.TaskList) error
-	nextPositionFunc    func(userID uint) (int, error)
-	updatePositionsFunc func(userID uint, orderedIDs []uint) error
+	nextPositionFunc    func(userID uint, workspaceID *uint) (int, error)
+	updatePositionsFunc func(userID uint, workspaceID *uint, orderedIDs []uint) error
 }
 
 func (m *mockTaskListStore) FindAll(userID uint, workspaceID *uint, filter repository.TaskListFilter) ([]models.TaskList, int64, error) {
@@ -61,15 +61,15 @@ func (m *mockTaskListStore) Delete(list *models.TaskList) error {
 	}
 	return nil
 }
-func (m *mockTaskListStore) NextPosition(userID uint) (int, error) {
+func (m *mockTaskListStore) NextPosition(userID uint, workspaceID *uint) (int, error) {
 	if m.nextPositionFunc != nil {
-		return m.nextPositionFunc(userID)
+		return m.nextPositionFunc(userID, workspaceID)
 	}
 	return 0, nil
 }
-func (m *mockTaskListStore) UpdatePositions(userID uint, orderedIDs []uint) error {
+func (m *mockTaskListStore) UpdatePositions(userID uint, workspaceID *uint, orderedIDs []uint) error {
 	if m.updatePositionsFunc != nil {
-		return m.updatePositionsFunc(userID, orderedIDs)
+		return m.updatePositionsFunc(userID, workspaceID, orderedIDs)
 	}
 	return nil
 }
@@ -155,7 +155,7 @@ func (m *mockWsCtxStore) IsMember(workspaceID, userID uint) (bool, error) {
 
 func TestTaskListService_CreateList_Success(t *testing.T) {
 	store := &mockTaskListStore{
-		nextPositionFunc: func(userID uint) (int, error) { return 0, nil },
+		nextPositionFunc: func(userID uint, workspaceID *uint) (int, error) { return 0, nil },
 		createFunc: func(list *models.TaskList) error {
 			list.ID = 1
 			return nil
@@ -176,7 +176,7 @@ func TestTaskListService_CreateList_Success(t *testing.T) {
 
 func TestTaskListService_CreateList_NormalizesPlateAndCustomer(t *testing.T) {
 	store := &mockTaskListStore{
-		nextPositionFunc: func(userID uint) (int, error) { return 0, nil },
+		nextPositionFunc: func(userID uint, workspaceID *uint) (int, error) { return 0, nil },
 		createFunc:       func(list *models.TaskList) error { return nil },
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
@@ -271,7 +271,7 @@ func TestTaskListService_UpdateItem_ListNotOwnedByUserReturnsError(t *testing.T)
 func TestTaskListService_ReorderLists_Success(t *testing.T) {
 	var receivedIDs []uint
 	store := &mockTaskListStore{
-		updatePositionsFunc: func(userID uint, orderedIDs []uint) error {
+		updatePositionsFunc: func(userID uint, workspaceID *uint, orderedIDs []uint) error {
 			receivedIDs = orderedIDs
 			return nil
 		},
@@ -282,6 +282,57 @@ func TestTaskListService_ReorderLists_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []uint{3, 1, 2}, receivedIDs)
+}
+
+func TestTaskListService_ReorderLists_UsesRequesterWorkspace(t *testing.T) {
+	wsID := uint(10)
+	var gotWS *uint
+	store := &mockTaskListStore{
+		updatePositionsFunc: func(userID uint, workspaceID *uint, orderedIDs []uint) error {
+			gotWS = workspaceID
+			return nil
+		},
+	}
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{2: models.RoleManager, 5: models.RoleEditor},
+	}
+	svc := NewTaskListService(store, &mockTaskItemStore{}, ws)
+
+	require.NoError(t, svc.ReorderLists(2, []uint{3, 1}))
+	require.NotNil(t, gotWS)
+	assert.Equal(t, wsID, *gotWS)
+
+	assert.ErrorIs(t, svc.ReorderLists(5, []uint{3, 1}), ErrNotManager)
+}
+
+func TestTaskListService_ReorderLists_ManagerMovesSubsetCreatedByOwner(t *testing.T) {
+	db := setupTestDB(t)
+	repo := repository.NewTaskListRepository(db)
+	wsID := uint(10)
+	ws := &mockWsCtxStore{
+		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
+		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner, 2: models.RoleManager},
+	}
+	svc := NewTaskListService(repo, repository.NewTaskItemRepository(db), ws)
+
+	a, err := svc.CreateList(1, "A", "", "")
+	require.NoError(t, err)
+	delivered, err := svc.CreateList(2, "B entregue", "", "")
+	require.NoError(t, err)
+	c, err := svc.CreateList(1, "C", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, []int{0, 1, 2}, []int{a.Position, delivered.Position, c.Position}, "cada novo veículo vai para o fim do pátio")
+
+	require.NoError(t, svc.ReorderLists(2, []uint{c.ID, a.ID}))
+
+	result, err := svc.ListAll(2, "", 1, 100, "", false)
+	require.NoError(t, err)
+	titles := []string{}
+	for _, l := range result.Lists {
+		titles = append(titles, l.Title)
+	}
+	assert.Equal(t, []string{"C", "B entregue", "A"}, titles)
 }
 
 func TestTaskListService_ReorderLists_EmptyIDsReturnsError(t *testing.T) {
@@ -566,8 +617,13 @@ func TestTaskListService_ChangeStatus_AccessDenied(t *testing.T) {
 func TestTaskListService_CreateList_WithWorkspace(t *testing.T) {
 	wsID := uint(10)
 	store := &mockTaskListStore{
-		nextPositionFunc: func(userID uint) (int, error) { return 1, nil },
-		createFunc:       func(list *models.TaskList) error { list.ID = 8; return nil },
+		nextPositionFunc: func(userID uint, workspaceID *uint) (int, error) {
+			if workspaceID == nil || *workspaceID != wsID {
+				return 0, errors.New("posição calculada fora da oficina")
+			}
+			return 1, nil
+		},
+		createFunc: func(list *models.TaskList) error { list.ID = 8; return nil },
 	}
 	ws := &mockWsCtxStore{
 		workspace:  &models.Workspace{Base: models.Base{ID: wsID}},
