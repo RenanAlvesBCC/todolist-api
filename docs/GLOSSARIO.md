@@ -40,6 +40,10 @@ Legado (migrado no boot): `aprovado` → `aguardando_retirada`; `concluido` → 
 
 Data de entrega: `delivered_at` no veículo, preenchido ao entrar em `entregue` e limpo ao sair.
 
+## Prioridade do veículo
+
+`priority`: `normal` (default) | `alta` | `urgente`. Definida pelo dono/gerente (`PUT /api/lists/:id/priority` ou na ficha); mecânico só vê. Não muda a ordem do pátio (continua por `position`).
+
 ## Tipos de pendência
 
 `aguardando_ml`, `procurando_peca`, `aguardando_cliente`, `aguardando_orcamento`, `aguardando_entrega`, `aguardando_retirada`, `aguardando_terceiro`, `outro`.

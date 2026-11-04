@@ -195,6 +195,24 @@ Content-Type: application/json
   "customer_whatsapp": "(11) 3456-7890"
 }
 
+### Alterar prioridade (normal | alta | urgente)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/priority
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "priority": "urgente"
+}
+
+### Prioridade invalida (400)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/priority
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "priority": "baixa"
+}
+
 ### Reordenar veiculos
 PUT {{baseUrl}}/api/lists/reorder
 Authorization: Bearer {{loginOwner.response.body.token}}

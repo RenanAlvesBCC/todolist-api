@@ -108,7 +108,13 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 		assert.Equal(t, "", *v, name)
 	}
 
+	var priority *string
+	require.NoError(t, db.Raw("SELECT priority FROM task_lists WHERE id = ?", old.ID).Scan(&priority).Error)
+	require.NotNil(t, priority)
+	assert.Equal(t, "normal", *priority)
+
 	got := loadVehicle(t, db, old.ID)
+	assert.Equal(t, models.PriorityNormal, got.Priority)
 	assert.Equal(t, "Fusca", got.Title)
 	assert.Equal(t, "João", got.Customer)
 	assert.Equal(t, models.StatusEmAndamento, got.Status)
@@ -117,6 +123,7 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 	require.NoError(t, db.Create(fresh).Error)
 	got = loadVehicle(t, db, fresh.ID)
 	assert.Equal(t, "", got.CustomerCPF)
+	assert.Equal(t, models.PriorityNormal, got.Priority)
 }
 
 func TestMigrateLegacyStatuses_ConcluidoKeepsOriginalUpdatedAtAsDeliveredAt(t *testing.T) {

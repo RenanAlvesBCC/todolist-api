@@ -88,7 +88,10 @@ func normalizeCustomer(customer string) string {
 	return strings.TrimSpace(customer)
 }
 
-var ErrTitleRequired = errors.New("título é obrigatório")
+var (
+	ErrTitleRequired   = errors.New("título é obrigatório")
+	ErrInvalidPriority = errors.New("prioridade inválida")
+)
 
 // VehicleInput é a ficha do veículo enviada no create/update.
 // Nos campos ponteiro, nil = chave ausente (no update mantém o valor atual).
@@ -99,9 +102,34 @@ type VehicleInput struct {
 	CustomerCPF      *string
 	CustomerCEP      *string
 	CustomerWhatsApp *string
+	Priority         *string
 }
 
-// applyCustomerData valida tudo antes de alterar a ficha, para não deixar o veículo meio atualizado.
+func parsePriority(value string) (models.VehiclePriority, error) {
+	p := models.VehiclePriority(value)
+	if !models.IsValidVehiclePriority(p) {
+		return "", ErrInvalidPriority
+	}
+	return p, nil
+}
+
+// applyOptionalFields valida tudo antes de alterar a ficha, para não deixar o veículo meio atualizado.
+func applyOptionalFields(list *models.TaskList, in VehicleInput) error {
+	priority := list.Priority
+	if in.Priority != nil {
+		p, err := parsePriority(*in.Priority)
+		if err != nil {
+			return err
+		}
+		priority = p
+	}
+	if err := applyCustomerData(list, in); err != nil {
+		return err
+	}
+	list.Priority = priority
+	return nil
+}
+
 func applyCustomerData(list *models.TaskList, in VehicleInput) error {
 	type field struct {
 		value     *string
@@ -179,10 +207,11 @@ func (s *TaskListService) CreateList(userID uint, in VehicleInput) (*models.Task
 		Customer: normalizeCustomer(in.Customer),
 		UserID:   userID,
 		Status:   models.StatusAguardandoBox,
+		Priority: models.PriorityNormal,
 		Items:    []models.TaskItem{},
 		Notes:    []models.VehicleNote{},
 	}
-	if err := applyCustomerData(list, in); err != nil {
+	if err := applyOptionalFields(list, in); err != nil {
 		return nil, err
 	}
 
@@ -294,12 +323,33 @@ func (s *TaskListService) UpdateList(listID, userID uint, in VehicleInput) (*mod
 		return nil, err
 	}
 
-	if err := applyCustomerData(list, in); err != nil {
+	if err := applyOptionalFields(list, in); err != nil {
 		return nil, err
 	}
 	list.Title = in.Title
 	list.Plate = normalizePlate(in.Plate)
 	list.Customer = normalizeCustomer(in.Customer)
+	if err := s.listRepo.Update(list); err != nil {
+		return nil, err
+	}
+	return s.revealCustomerData(list, userID), nil
+}
+
+// ChangePriority não mexe na ordem do pátio: a ordenação continua por position.
+func (s *TaskListService) ChangePriority(listID, userID uint, priority string) (*models.TaskList, error) {
+	if err := s.requireManager(userID); err != nil {
+		return nil, err
+	}
+	p, err := parsePriority(priority)
+	if err != nil {
+		return nil, err
+	}
+
+	list, err := s.resolveList(listID, userID)
+	if err != nil {
+		return nil, err
+	}
+	list.Priority = p
 	if err := s.listRepo.Update(list); err != nil {
 		return nil, err
 	}

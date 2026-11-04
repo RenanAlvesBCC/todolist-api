@@ -31,6 +31,14 @@ type mockTaskListProvider struct {
 	reorderListsFunc   func(userID uint, orderedIDs []uint) error
 	reorderItemsFunc   func(listID, userID uint, orderedIDs []uint) error
 	changeStatusFunc   func(listID, userID uint, newStatus models.TaskListStatus) error
+	changePriorityFunc func(listID, userID uint, priority string) (*models.TaskList, error)
+}
+
+func (m *mockTaskListProvider) ChangePriority(listID, userID uint, priority string) (*models.TaskList, error) {
+	if m.changePriorityFunc == nil {
+		return nil, nil
+	}
+	return m.changePriorityFunc(listID, userID, priority)
 }
 
 func (m *mockTaskListProvider) CreateList(userID uint, in services.VehicleInput) (*models.TaskList, error) {
@@ -132,6 +140,7 @@ func setupRouter(provider *mockTaskListProvider) *gin.Engine {
 		group.PUT("/lists/:id/items/:itemId", handler.UpdateItem)
 		group.DELETE("/lists/:id/items/:itemId", handler.DeleteItem)
 		group.PUT("/lists/:id/status", handler.ChangeStatus)
+		group.PUT("/lists/:id/priority", handler.ChangePriority)
 	}
 	return router
 }

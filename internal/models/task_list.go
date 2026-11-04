@@ -43,6 +43,22 @@ func IsValidTaskListStatus(s TaskListStatus) bool {
 	return false
 }
 
+type VehiclePriority string
+
+const (
+	PriorityNormal  VehiclePriority = "normal"
+	PriorityAlta    VehiclePriority = "alta"
+	PriorityUrgente VehiclePriority = "urgente"
+)
+
+func IsValidVehiclePriority(p VehiclePriority) bool {
+	switch p {
+	case PriorityNormal, PriorityAlta, PriorityUrgente:
+		return true
+	}
+	return false
+}
+
 type TaskList struct {
 	Base
 	Title    string `gorm:"not null" json:"title"`
@@ -55,6 +71,7 @@ type TaskList struct {
 	UserID           uint             `gorm:"not null" json:"user_id"`
 	WorkspaceID      *uint            `json:"workspace_id"`
 	Status           TaskListStatus   `gorm:"not null;default:'aguardando_box'" json:"status"`
+	Priority         VehiclePriority  `gorm:"not null;default:'normal'" json:"priority"`
 	Position         int              `gorm:"not null;default:0" json:"position"`
 	DeliveredAt      *time.Time       `gorm:"index" json:"delivered_at"`
 	Items            []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`

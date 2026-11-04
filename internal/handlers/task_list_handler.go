@@ -26,6 +26,7 @@ type TaskListProvider interface {
 	ReorderLists(userID uint, orderedIDs []uint) error
 	ReorderItems(listID, userID uint, orderedIDs []uint) error
 	ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error
+	ChangePriority(listID, userID uint, priority string) (*models.TaskList, error)
 }
 
 type TaskListHandler struct {
@@ -49,6 +50,7 @@ type listInput struct {
 	CustomerCPF      *string `json:"customer_cpf"`
 	CustomerCEP      *string `json:"customer_cep"`
 	CustomerWhatsApp *string `json:"customer_whatsapp"`
+	Priority         *string `json:"priority"`
 }
 
 func (in listInput) toVehicleInput() services.VehicleInput {
@@ -59,12 +61,14 @@ func (in listInput) toVehicleInput() services.VehicleInput {
 		CustomerCPF:      in.CustomerCPF,
 		CustomerCEP:      in.CustomerCEP,
 		CustomerWhatsApp: in.CustomerWhatsApp,
+		Priority:         in.Priority,
 	}
 }
 
 func isVehicleValidationError(err error) bool {
 	for _, target := range []error{
 		services.ErrTitleRequired,
+		services.ErrInvalidPriority,
 		services.ErrInvalidCPF,
 		services.ErrInvalidCEP,
 		services.ErrInvalidWhatsApp,
@@ -149,15 +153,7 @@ func (h *TaskListHandler) Update(c *gin.Context) {
 
 	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.toVehicleInput())
 	if err != nil {
-		if errors.Is(err, services.ErrNotManager) {
-			utils.RespondError(c, http.StatusForbidden, err.Error())
-			return
-		}
-		if isVehicleValidationError(err) {
-			utils.RespondError(c, http.StatusBadRequest, err.Error())
-			return
-		}
-		utils.RespondError(c, http.StatusNotFound, err.Error())
+		respondVehicleMutationError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -315,3 +311,39 @@ func (h *TaskListHandler) ChangeStatus(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// respondVehicleMutationError: 403 mutação de gerente, 400 validação, 404 o resto (inclui sem acesso).
+func respondVehicleMutationError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, services.ErrNotManager):
+		utils.RespondError(c, http.StatusForbidden, err.Error())
+	case isVehicleValidationError(err):
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+	default:
+		utils.RespondError(c, http.StatusNotFound, err.Error())
+	}
+}
+
+type changePriorityInput struct {
+	Priority string `json:"priority" binding:"required"`
+}
+
+func (h *TaskListHandler) ChangePriority(c *gin.Context) {
+	listID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
+		return
+	}
+
+	var input changePriorityInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
+		return
+	}
+
+	list, err := h.listService.ChangePriority(uint(listID), getUserID(c), input.Priority)
+	if err != nil {
+		respondVehicleMutationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, list)
+}

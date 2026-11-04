@@ -126,11 +126,12 @@ Cria veículo. Só `owner`/`manager`. Body:
   "customer": "Maria Souza",
   "customer_cpf": "123.456.789-09",
   "customer_cep": "01310-100",
-  "customer_whatsapp": "+55 (11) 98765-4321"
+  "customer_whatsapp": "+55 (11) 98765-4321",
+  "priority": "alta"
 }
 ```
 
-Só `title` é obrigatório; os demais têm default `""`. Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
+Só `title` é obrigatório; os demais têm default `""` (`priority`: default `normal`; valor fora do enum → 400 `prioridade inválida`). Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
 
 ### GET /api/lists/:id
 Detalhe. Mecânico só se atribuído ou membro com acesso ao veículo da esteira.
@@ -140,8 +141,19 @@ Ficha do veículo. Só `owner`/`manager`; mecânico só lê (403).
 
 - `title` (obrigatório), `plate` e `customer` são **substituídos** sempre (como antes).
 - `customer_cpf`, `customer_cep`, `customer_whatsapp` são opcionais: **chave ausente (ou `null`) mantém o valor atual**; chave presente grava, e `""` limpa.
-- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp.
-- 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`); nada é gravado se algum campo for inválido.
+- `priority` também é opcional: ausente (ou `null`) mantém; presente precisa ser um valor válido do enum.
+- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp nem a prioridade.
+- 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `prioridade inválida`); nada é gravado se algum campo for inválido.
+
+### PUT /api/lists/:id/priority
+Body: `{ "priority": "alta" }`. Só `owner`/`manager`.
+
+- Prioridade: `normal` | `alta` | `urgente` (default `normal`). Visível para todos os papéis.
+- **Não reordena** o pátio: a ordem continua por `position` (reorder manual).
+- 200 com o veículo atualizado (JSON conforme o papel).
+- 400 `{ "error": "prioridade inválida" }` / `dados inválidos` (sem `priority`)
+- 403 `{ "error": "apenas gerentes podem gerenciar veículos" }` (mecânico)
+- 404 veículo inexistente ou de outra oficina
 
 ### Dados do cliente (LGPD)
 
@@ -288,9 +300,11 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
 
 \* Só para `owner`/`manager` (ver [Dados do cliente](#dados-do-cliente-lgpd)); ausentes para o mecânico. Veículos antigos recebem `""` na migração.
+
+`priority`: `normal` | `alta` | `urgente`; veículos antigos recebem `normal` na migração.
 
 `notes`: informações importantes **ativas** do veículo, da mais recente para a mais antiga, no mesmo formato de `GET /api/lists/:id/notes`. Vem em `GET /api/lists`, `GET /api/lists/:id`, `PUT /api/lists/:id` e `POST /api/lists` (`[]`). Campo aditivo: clientes devem tratar ausência (API antiga) como lista vazia.
 

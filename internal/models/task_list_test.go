@@ -34,6 +34,15 @@ func TestTaskListMarshalJSON_CustomerDataHiddenByDefault(t *testing.T) {
 	assert.Equal(t, "Maria", body["customer"])
 }
 
+func TestIsValidVehiclePriority(t *testing.T) {
+	for _, p := range []VehiclePriority{PriorityNormal, PriorityAlta, PriorityUrgente} {
+		assert.True(t, IsValidVehiclePriority(p))
+	}
+	for _, p := range []VehiclePriority{"", "baixa", "ALTA"} {
+		assert.False(t, IsValidVehiclePriority(p))
+	}
+}
+
 func TestTaskListMarshalJSON_CustomerDataWhenVisible(t *testing.T) {
 	list := &TaskList{Title: "Gol", CustomerCPF: "12345678909", CustomerDataVisible: true}
 
