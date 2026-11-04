@@ -65,18 +65,23 @@ type TaskList struct {
 	Plate    string `gorm:"not null;default:''" json:"plate"`
 	Customer string `gorm:"not null;default:''" json:"customer"`
 	// Dados do cliente (LGPD), só dígitos. Fora do JSON por padrão: ver MarshalJSON.
-	CustomerCPF      string           `gorm:"not null;default:''" json:"-"`
-	CustomerCEP      string           `gorm:"not null;default:''" json:"-"`
-	CustomerWhatsApp string           `gorm:"column:customer_whatsapp;not null;default:''" json:"-"`
-	UserID           uint             `gorm:"not null" json:"user_id"`
-	WorkspaceID      *uint            `json:"workspace_id"`
-	Status           TaskListStatus   `gorm:"not null;default:'aguardando_box'" json:"status"`
-	Priority         VehiclePriority  `gorm:"not null;default:'normal'" json:"priority"`
-	Position         int              `gorm:"not null;default:0" json:"position"`
-	DeliveredAt      *time.Time       `gorm:"index" json:"delivered_at"`
-	Items            []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`
-	Assignments      []ListAssignment `gorm:"foreignKey:TaskListID" json:"assignments,omitempty"`
-	Notes            []VehicleNote    `gorm:"foreignKey:TaskListID" json:"notes"`
+	CustomerCPF      string          `gorm:"not null;default:''" json:"-"`
+	CustomerCEP      string          `gorm:"not null;default:''" json:"-"`
+	CustomerWhatsApp string          `gorm:"column:customer_whatsapp;not null;default:''" json:"-"`
+	UserID           uint            `gorm:"not null" json:"user_id"`
+	WorkspaceID      *uint           `json:"workspace_id"`
+	Status           TaskListStatus  `gorm:"not null;default:'aguardando_box'" json:"status"`
+	Priority         VehiclePriority `gorm:"not null;default:'normal'" json:"priority"`
+	Position         int             `gorm:"not null;default:0" json:"position"`
+	DeliveredAt      *time.Time      `gorm:"index" json:"delivered_at"`
+	// Vídeo de check-up: null enquanto ninguém marcou como feito.
+	CheckupVideoDoneAt *time.Time `json:"checkup_video_done_at"`
+	CheckupVideoDoneBy *uint      `json:"checkup_video_done_by"`
+	// Calculado na consulta a partir de users; não é coluna de task_lists.
+	CheckupVideoDoneByName *string          `gorm:"-:migration;->" json:"checkup_video_done_by_name"`
+	Items                  []TaskItem       `gorm:"foreignKey:TaskListID" json:"items"`
+	Assignments            []ListAssignment `gorm:"foreignKey:TaskListID" json:"assignments,omitempty"`
+	Notes                  []VehicleNote    `gorm:"foreignKey:TaskListID" json:"notes"`
 
 	// CustomerDataVisible é decidido pelo service conforme o papel de quem pede
 	// (dono/gerente); com false os dados do cliente nem aparecem como chave no JSON.

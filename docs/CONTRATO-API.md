@@ -193,6 +193,22 @@ Body: `{ "ids": [3,1,2] }`. Só `owner`/`manager` (mecânico → 403). 204.
 
 Ordenação de `GET /api/lists`: `position` asc, desempate por `id` asc. Novo veículo entra com `position` = maior posição do pátio + 1 (fim da fila).
 
+### PUT /api/lists/:id/checkup-video
+Lembrete fixo "Vídeo de check-up feito?" até alguém marcar. Body: `{ "done": true }` ou `{ "done": false }`.
+
+- Quem pode: `owner`/`manager` em qualquer veículo da oficina; `editor` só nos veículos em que está atribuído (mesma regra de serviços/notas). Sem acesso ou outra oficina → 404.
+- `true`: grava `checkup_video_done_at` (agora, UTC) e `checkup_video_done_by` (usuário atual). Reenviar `true` **mantém** data e autor originais.
+- `false`: limpa os dois (`null`).
+- 200 com o veículo atualizado (JSON conforme o papel).
+- 400 `dados inválidos` (sem `done` ou não booleano) / `id inválido`
+
+```json
+{ "id": 7, "checkup_video_done_at": "2026-11-04T14:30:00Z", "checkup_video_done_by": 3, "checkup_video_done_by_name": "Ana Silva" }
+{ "id": 8, "checkup_video_done_at": null, "checkup_video_done_by": null, "checkup_video_done_by_name": null }
+```
+
+`checkup_video_done_by_name` = `first_name last_name` (trim); se vazio, `username` (igual a `author_name` das notas).
+
 ### PUT /api/lists/:id/status
 Body: `{ "status": "aguardando_peca" }`.
 - `editor`, `owner` e `manager`: qualquer status válido da lista acima (fluxo linear é só sugestão de UI).
@@ -300,11 +316,42 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `position`, `delivered_at`, `checkup_video_done_at`, `checkup_video_done_by`, `checkup_video_done_by_name`, `items[]`, `assignments[]`, `notes[]`.
 
 \* Só para `owner`/`manager` (ver [Dados do cliente](#dados-do-cliente-lgpd)); ausentes para o mecânico. Veículos antigos recebem `""` na migração.
 
 `priority`: `normal` | `alta` | `urgente`; veículos antigos recebem `normal` na migração.
+
+`checkup_video_done_at` / `checkup_video_done_by` / `checkup_video_done_by_name`: sempre presentes; `null` enquanto o vídeo não foi marcado (inclusive veículos antigos). Visíveis para todos os papéis.
+
+Exemplo completo — dono/gerente:
+
+```json
+{
+  "id": 7, "title": "Gol 2012", "plate": "ABC1D23", "customer": "Maria Souza",
+  "customer_cpf": "12345678909", "customer_cep": "01310100", "customer_whatsapp": "11987654321",
+  "status": "em_andamento", "priority": "alta", "position": 0, "delivered_at": null,
+  "checkup_video_done_at": "2026-11-04T14:30:00Z", "checkup_video_done_by": 3, "checkup_video_done_by_name": "Ana Silva",
+  "items": [], "assignments": [{ "id": 1, "task_list_id": 7, "user_id": 3, "assigned_by": 1, "assigned_at": "..." }], "notes": []
+}
+```
+
+Mecânico atribuído (mesmo veículo): idêntico, **sem** `customer_cpf`, `customer_cep` e `customer_whatsapp`.
+
+## Matriz de permissões do veículo
+
+| Ação | owner (Dono) | manager (Gerente) | editor (Mecânico) |
+| --- | --- | --- | --- |
+| Ver veículo (`GET /api/lists`, `/:id`) | pátio inteiro | pátio inteiro | só atribuídos (outros → 404) |
+| Ver `customer_cpf` / `customer_cep` / `customer_whatsapp` | sim | sim | **nunca** (chaves omitidas) |
+| Ver `priority` e `checkup_video_*` | sim | sim | sim |
+| Criar / editar ficha (`POST /api/lists`, `PUT /:id`) | sim | sim | 403 |
+| `PUT /:id/priority` | sim | sim | 403 |
+| `PUT /:id/checkup-video` | sim | sim | só atribuídos (outros → 404) |
+| `PUT /:id/status` | sim | sim | só atribuídos |
+| `PUT /api/lists/reorder`, `DELETE /:id` | sim | sim | 403 |
+
+Veículo de outra oficina → 404 para todos.
 
 `notes`: informações importantes **ativas** do veículo, da mais recente para a mais antiga, no mesmo formato de `GET /api/lists/:id/notes`. Vem em `GET /api/lists`, `GET /api/lists/:id`, `PUT /api/lists/:id` e `POST /api/lists` (`[]`). Campo aditivo: clientes devem tratar ausência (API antiga) como lista vazia.
 

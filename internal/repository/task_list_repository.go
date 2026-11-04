@@ -25,6 +25,19 @@ type TaskListFilter struct {
 	AssignedToID *uint
 }
 
+// Nome de quem marcou o vídeo de check-up, no mesmo formato de author_name das notas.
+const checkupVideoDoneByNameSelect = "(SELECT COALESCE(NULLIF(TRIM(users.first_name || ' ' || users.last_name), ''), users.username)" +
+	" FROM users WHERE users.id = task_lists.checkup_video_done_by) AS checkup_video_done_by_name"
+
+// vehicleDetails carrega o veículo completo: serviços, atribuições, notas ativas e campos calculados.
+func vehicleDetails(db *gorm.DB) *gorm.DB {
+	return db.
+		Select("task_lists.*, "+checkupVideoDoneByNameSelect).
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
+		Preload("Assignments").
+		Preload("Notes", notesWithAuthorNewestFirst)
+}
+
 func (r *TaskListRepository) Create(list *models.TaskList) error {
 	return r.db.Create(list).Error
 }
@@ -43,9 +56,7 @@ func (r *TaskListRepository) FindAll(userID uint, workspaceID *uint, filter Task
 
 	offset := (filter.Page - 1) * filter.Limit
 	if err := r.buildQuery(userID, workspaceID, filter).
-		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
-		Preload("Assignments").
-		Preload("Notes", notesWithAuthorNewestFirst).
+		Scopes(vehicleDetails).
 		Order("position asc").
 		Order("id asc").
 		Offset(offset).Limit(filter.Limit).
@@ -94,9 +105,7 @@ func (r *TaskListRepository) buildQuery(userID uint, workspaceID *uint, filter T
 func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList, error) {
 	var list models.TaskList
 	if err := r.db.
-		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
-		Preload("Assignments").
-		Preload("Notes", notesWithAuthorNewestFirst).
+		Scopes(vehicleDetails).
 		Where("id = ? AND user_id = ?", id, userID).
 		First(&list).Error; err != nil {
 		return nil, err
@@ -108,9 +117,7 @@ func (r *TaskListRepository) FindByIDAndUser(id, userID uint) (*models.TaskList,
 func (r *TaskListRepository) FindByID(id uint) (*models.TaskList, error) {
 	var list models.TaskList
 	if err := r.db.
-		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position asc") }).
-		Preload("Assignments").
-		Preload("Notes", notesWithAuthorNewestFirst).
+		Scopes(vehicleDetails).
 		First(&list, id).Error; err != nil {
 		return nil, err
 	}

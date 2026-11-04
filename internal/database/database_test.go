@@ -115,6 +115,8 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 
 	got := loadVehicle(t, db, old.ID)
 	assert.Equal(t, models.PriorityNormal, got.Priority)
+	assert.Nil(t, got.CheckupVideoDoneAt, "vídeo de check-up começa pendente")
+	assert.Nil(t, got.CheckupVideoDoneBy)
 	assert.Equal(t, "Fusca", got.Title)
 	assert.Equal(t, "João", got.Customer)
 	assert.Equal(t, models.StatusEmAndamento, got.Status)

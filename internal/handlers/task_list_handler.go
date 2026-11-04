@@ -27,6 +27,7 @@ type TaskListProvider interface {
 	ReorderItems(listID, userID uint, orderedIDs []uint) error
 	ChangeStatus(listID, userID uint, newStatus models.TaskListStatus) error
 	ChangePriority(listID, userID uint, priority string) (*models.TaskList, error)
+	SetCheckupVideo(listID, userID uint, done bool) (*models.TaskList, error)
 }
 
 type TaskListHandler struct {
@@ -341,6 +342,31 @@ func (h *TaskListHandler) ChangePriority(c *gin.Context) {
 	}
 
 	list, err := h.listService.ChangePriority(uint(listID), getUserID(c), input.Priority)
+	if err != nil {
+		respondVehicleMutationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, list)
+}
+
+type checkupVideoInput struct {
+	Done *bool `json:"done" binding:"required"`
+}
+
+func (h *TaskListHandler) SetCheckupVideo(c *gin.Context) {
+	listID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "id inválido")
+		return
+	}
+
+	var input checkupVideoInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "dados inválidos: "+err.Error())
+		return
+	}
+
+	list, err := h.listService.SetCheckupVideo(uint(listID), getUserID(c), *input.Done)
 	if err != nil {
 		respondVehicleMutationError(c, err)
 		return

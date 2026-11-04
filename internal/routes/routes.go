@@ -66,6 +66,7 @@ func SetupRoutes(
 		protected.DELETE("/lists/:id/items/:itemId", listHandler.DeleteItem)
 		protected.PUT("/lists/:id/status", listHandler.ChangeStatus)
 		protected.PUT("/lists/:id/priority", listHandler.ChangePriority)
+		protected.PUT("/lists/:id/checkup-video", listHandler.SetCheckupVideo)
 
 		// Atribuições de mecânicos (Fase A.1)
 		protected.GET("/lists/:id/assignments", assignmentHandler.List)

@@ -353,6 +353,24 @@ Content-Type: application/json
 GET {{baseUrl}}/api/lists/{{createList.response.body.id}}/assignments
 Authorization: Bearer {{loginOwner.response.body.token}}
 
+### Mecanico marca o video de check-up (precisa estar atribuido)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/checkup-video
+Authorization: Bearer {{loginMechanic.response.body.token}}
+Content-Type: application/json
+
+{
+  "done": true
+}
+
+### Desmarcar video de check-up
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}/checkup-video
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "done": false
+}
+
 ### Remover orcamento
 DELETE {{baseUrl}}/api/lists/{{createList.response.body.id}}/quotes/{{addQuote.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}

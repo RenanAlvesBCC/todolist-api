@@ -44,6 +44,10 @@ Data de entrega: `delivered_at` no veículo, preenchido ao entrar em `entregue` 
 
 `priority`: `normal` (default) | `alta` | `urgente`. Definida pelo dono/gerente (`PUT /api/lists/:id/priority` ou na ficha); mecânico só vê. Não muda a ordem do pátio (continua por `position`).
 
+## Vídeo de check-up
+
+Toda entrada de veículo exige gravar um vídeo de check-up. A UI mostra o lembrete fixo "Vídeo de check-up feito?" enquanto `checkup_video_done_at` for `null`. Marcar: `PUT /api/lists/:id/checkup-video` `{ "done": true }` (dono, gerente ou mecânico atribuído); grava data/hora e autor (`checkup_video_done_by`, `checkup_video_done_by_name`). `{ "done": false }` desfaz.
+
 ## Tipos de pendência
 
 `aguardando_ml`, `procurando_peca`, `aguardando_cliente`, `aguardando_orcamento`, `aguardando_entrega`, `aguardando_retirada`, `aguardando_terceiro`, `outro`.

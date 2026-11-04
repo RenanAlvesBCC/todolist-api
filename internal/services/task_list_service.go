@@ -335,6 +335,46 @@ func (s *TaskListService) UpdateList(listID, userID uint, in VehicleInput) (*mod
 	return s.revealCustomerData(list, userID), nil
 }
 
+// SetCheckupVideo marca/desmarca o vídeo de check-up. Mesma regra de acesso de serviços/notas:
+// dono/gerente em qualquer veículo da oficina; mecânico só nos atribuídos (senão 404).
+func (s *TaskListService) SetCheckupVideo(listID, userID uint, done bool) (*models.TaskList, error) {
+	list, err := s.resolveList(listID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if applyCheckupVideo(list, done, userID, time.Now().UTC()) {
+		if err := s.listRepo.Update(list); err != nil {
+			return nil, err
+		}
+		// Recarrega para trazer checkup_video_done_by_name, calculado na consulta.
+		if list, err = s.listRepo.FindByID(listID); err != nil {
+			return nil, err
+		}
+	}
+	return s.revealCustomerData(list, userID), nil
+}
+
+// applyCheckupVideo: true grava data/autor só na primeira marcação; false limpa.
+// Devolve se algo mudou.
+func applyCheckupVideo(list *models.TaskList, done bool, userID uint, now time.Time) bool {
+	if done {
+		if list.CheckupVideoDoneAt != nil {
+			return false
+		}
+		list.CheckupVideoDoneAt = &now
+		list.CheckupVideoDoneBy = &userID
+		return true
+	}
+	if list.CheckupVideoDoneAt == nil && list.CheckupVideoDoneBy == nil {
+		return false
+	}
+	list.CheckupVideoDoneAt = nil
+	list.CheckupVideoDoneBy = nil
+	list.CheckupVideoDoneByName = nil
+	return true
+}
+
 // ChangePriority não mexe na ordem do pátio: a ordenação continua por position.
 func (s *TaskListService) ChangePriority(listID, userID uint, priority string) (*models.TaskList, error) {
 	if err := s.requireManager(userID); err != nil {
