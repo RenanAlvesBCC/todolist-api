@@ -117,13 +117,56 @@ Default ao criar veículo: `aguardando_box`.
 Legado: `aprovado` → `aguardando_retirada`; `concluido` → `entregue` (migração no boot).
 
 ### POST /api/lists
-Cria veículo. Só `owner`/`manager`. Body: `{ "title": "string", "plate": "string", "customer": "string" }`. `plate` e `customer` opcionais (default `""`). Placa é normalizada (trim + maiúsculas), sem validação de formato. 201.
+Cria veículo. Só `owner`/`manager`. Body:
+
+```json
+{
+  "title": "Gol 2012",
+  "plate": "abc1d23",
+  "customer": "Maria Souza",
+  "customer_cpf": "123.456.789-09",
+  "customer_cep": "01310-100",
+  "customer_whatsapp": "+55 (11) 98765-4321"
+}
+```
+
+Só `title` é obrigatório; os demais têm default `""`. Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
 
 ### GET /api/lists/:id
 Detalhe. Mecânico só se atribuído ou membro com acesso ao veículo da esteira.
 
 ### PUT /api/lists/:id
-Ficha (`title`, `plate`, `customer`). Só `owner`/`manager`. Substitui os três campos; `title` obrigatório. Mecânico só lê.
+Ficha do veículo. Só `owner`/`manager`; mecânico só lê (403).
+
+- `title` (obrigatório), `plate` e `customer` são **substituídos** sempre (como antes).
+- `customer_cpf`, `customer_cep`, `customer_whatsapp` são opcionais: **chave ausente (ou `null`) mantém o valor atual**; chave presente grava, e `""` limpa.
+- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp.
+- 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`); nada é gravado se algum campo for inválido.
+
+### Dados do cliente (LGPD)
+
+`customer_cpf`, `customer_cep` e `customer_whatsapp` ficam gravados **só com dígitos**. A entrada aceita máscara.
+
+| Campo | Aceita | Grava | Erro (400) |
+| --- | --- | --- | --- |
+| `customer_cpf` | `""` ou 11 dígitos com dígitos verificadores válidos; máscara com `.`, `-`, espaço (`123.456.789-09`). Sequências repetidas (`111.111.111-11`) são recusadas. | `12345678909` | `{ "error": "CPF inválido" }` |
+| `customer_cep` | `""` ou 8 dígitos; `-`, `.`, espaço (`01310-100`) | `01310100` | `{ "error": "CEP inválido" }` |
+| `customer_whatsapp` | `""` ou DDD + número (10 ou 11 dígitos); `+`, `()`, `-`, `.`, espaço; prefixo `+55`/`55` é removido quando sobram 10–11 dígitos. DDD não começa com 0. | `11987654321` | `{ "error": "WhatsApp inválido" }` |
+
+**Visibilidade:** os três campos só aparecem no JSON para `owner`/`manager` da oficina do veículo. Para `editor` (mecânico) as chaves **não existem** na resposta, em todos os endpoints que devolvem veículo (`GET /api/lists`, `GET /api/lists/:id` e as mutações que devolvem o veículo). O mecânico continua vendo `customer` (nome).
+
+Dono/gerente:
+
+```json
+{ "id": 7, "title": "Gol 2012", "plate": "ABC1D23", "customer": "Maria Souza",
+  "customer_cpf": "12345678909", "customer_cep": "01310100", "customer_whatsapp": "11987654321" }
+```
+
+Mecânico (mesmo veículo):
+
+```json
+{ "id": 7, "title": "Gol 2012", "plate": "ABC1D23", "customer": "Maria Souza" }
+```
 
 ### DELETE /api/lists/:id
 Remove veículo e serviços. Só `owner`/`manager`.
@@ -245,7 +288,9 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `position`, `delivered_at`, `items[]`, `assignments[]`, `notes[]`.
+
+\* Só para `owner`/`manager` (ver [Dados do cliente](#dados-do-cliente-lgpd)); ausentes para o mecânico. Veículos antigos recebem `""` na migração.
 
 `notes`: informações importantes **ativas** do veículo, da mais recente para a mais antiga, no mesmo formato de `GET /api/lists/:id/notes`. Vem em `GET /api/lists`, `GET /api/lists/:id`, `PUT /api/lists/:id` e `POST /api/lists` (`[]`). Campo aditivo: clientes devem tratar ausência (API antiga) como lista vazia.
 
@@ -260,6 +305,7 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 
 ## Erros comuns
 
+- 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, ...)
 - 401 token ausente, inválido ou na blacklist
 - 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)

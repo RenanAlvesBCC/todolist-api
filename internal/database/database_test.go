@@ -65,6 +65,60 @@ func TestBackfillDeliveredAt_FillsOnlyEntregueWithoutDate(t *testing.T) {
 	assert.Nil(t, loadVehicle(t, db, notDelivered).DeliveredAt)
 }
 
+// legacyTaskList é a tabela task_lists como estava em produção antes dos dados do cliente.
+type legacyTaskList struct {
+	ID          uint `gorm:"primarykey"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	Title       string         `gorm:"not null"`
+	Plate       string         `gorm:"not null;default:''"`
+	Customer    string         `gorm:"not null;default:''"`
+	UserID      uint           `gorm:"not null"`
+	WorkspaceID *uint
+	Status      string `gorm:"not null;default:'aguardando_box'"`
+	Position    int    `gorm:"not null;default:0"`
+	DeliveredAt *time.Time
+}
+
+func (legacyTaskList) TableName() string { return "task_lists" }
+
+func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+
+	require.NoError(t, db.AutoMigrate(&legacyTaskList{}))
+	old := legacyTaskList{Title: "Fusca", Customer: "João", UserID: 1, Status: "em_andamento"}
+	require.NoError(t, db.Create(&old).Error)
+
+	require.NoError(t, migrate(db))
+	require.NoError(t, migrate(db), "migração é idempotente")
+
+	var raw struct {
+		CustomerCPF      *string
+		CustomerCEP      *string
+		CustomerWhatsApp *string `gorm:"column:customer_whatsapp"`
+	}
+	require.NoError(t, db.Raw("SELECT customer_cpf, customer_cep, customer_whatsapp FROM task_lists WHERE id = ?", old.ID).Scan(&raw).Error)
+	for name, v := range map[string]*string{"customer_cpf": raw.CustomerCPF, "customer_cep": raw.CustomerCEP, "customer_whatsapp": raw.CustomerWhatsApp} {
+		require.NotNil(t, v, name+" não pode ficar NULL")
+		assert.Equal(t, "", *v, name)
+	}
+
+	got := loadVehicle(t, db, old.ID)
+	assert.Equal(t, "Fusca", got.Title)
+	assert.Equal(t, "João", got.Customer)
+	assert.Equal(t, models.StatusEmAndamento, got.Status)
+
+	fresh := &models.TaskList{Title: "Novo", UserID: 1}
+	require.NoError(t, db.Create(fresh).Error)
+	got = loadVehicle(t, db, fresh.ID)
+	assert.Equal(t, "", got.CustomerCPF)
+}
+
 func TestMigrateLegacyStatuses_ConcluidoKeepsOriginalUpdatedAtAsDeliveredAt(t *testing.T) {
 	db := setupTestDB(t)
 	oldUpdate := time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)

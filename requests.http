@@ -131,7 +131,20 @@ Content-Type: application/json
 {
   "title": "Fusca 1972",
   "plate": "ABC-1234",
-  "customer": "João Silva"
+  "customer": "João Silva",
+  "customer_cpf": "123.456.789-09",
+  "customer_cep": "01310-100",
+  "customer_whatsapp": "+55 (11) 98765-4321"
+}
+
+### Criar veiculo com CPF invalido (400)
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Veiculo invalido",
+  "customer_cpf": "111.111.111-11"
 }
 
 ### Criar segundo veiculo
@@ -167,6 +180,19 @@ Content-Type: application/json
   "title": "Fusca 1972 revisao",
   "plate": "ABC-1234",
   "customer": "João Silva"
+}
+
+### Atualizar dados do cliente (chave ausente mantem; "" limpa)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 revisao",
+  "plate": "ABC-1234",
+  "customer": "João Silva",
+  "customer_cep": "",
+  "customer_whatsapp": "(11) 3456-7890"
 }
 
 ### Reordenar veiculos
@@ -342,7 +368,7 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 GET {{baseUrl}}/api/workspace
 Authorization: Bearer {{loginOwner.response.body.token}}
 
-### Esteira do mecanico
+### Esteira do mecanico (sem customer_cpf/customer_cep/customer_whatsapp no JSON)
 GET {{baseUrl}}/api/lists?mine=true
 Authorization: Bearer {{loginMechanic.response.body.token}}
 

@@ -88,35 +88,115 @@ func normalizeCustomer(customer string) string {
 	return strings.TrimSpace(customer)
 }
 
-func (s *TaskListService) CreateList(userID uint, title, plate, customer string) (*models.TaskList, error) {
-	if title == "" {
-		return nil, errors.New("título é obrigatório")
+var ErrTitleRequired = errors.New("título é obrigatório")
+
+// VehicleInput é a ficha do veículo enviada no create/update.
+// Nos campos ponteiro, nil = chave ausente (no update mantém o valor atual).
+type VehicleInput struct {
+	Title            string
+	Plate            string
+	Customer         string
+	CustomerCPF      *string
+	CustomerCEP      *string
+	CustomerWhatsApp *string
+}
+
+// applyCustomerData valida tudo antes de alterar a ficha, para não deixar o veículo meio atualizado.
+func applyCustomerData(list *models.TaskList, in VehicleInput) error {
+	type field struct {
+		value     *string
+		normalize func(string) (string, error)
+		target    *string
+	}
+	fields := []field{
+		{in.CustomerCPF, normalizeCPF, &list.CustomerCPF},
+		{in.CustomerCEP, normalizeCEP, &list.CustomerCEP},
+		{in.CustomerWhatsApp, normalizeWhatsApp, &list.CustomerWhatsApp},
+	}
+	normalized := make([]string, len(fields))
+	for i, f := range fields {
+		if f.value == nil {
+			continue
+		}
+		v, err := f.normalize(*f.value)
+		if err != nil {
+			return err
+		}
+		normalized[i] = v
+	}
+	for i, f := range fields {
+		if f.value != nil {
+			*f.target = normalized[i]
+		}
+	}
+	return nil
+}
+
+// viewer é quem está pedindo: oficina e papel nela ("" sem oficina).
+type viewer struct {
+	userID uint
+	wsID   *uint
+	role   models.WorkspaceRole
+}
+
+func (s *TaskListService) viewerOf(userID uint) viewer {
+	v := viewer{userID: userID, wsID: s.workspaceID(userID)}
+	if v.wsID != nil {
+		v.role, _ = s.wsStore.GetMemberRole(*v.wsID, userID)
+	}
+	return v
+}
+
+// canSeeCustomerData: CPF/CEP/WhatsApp só para dono/gerente da oficina do veículo
+// (ou quem criou um veículo pessoal legado). Mecânico nunca recebe.
+func (v viewer) canSeeCustomerData(list *models.TaskList) bool {
+	if v.role == models.RoleEditor {
+		return false
+	}
+	if list.WorkspaceID == nil {
+		return list.UserID == v.userID
+	}
+	return v.wsID != nil && *list.WorkspaceID == *v.wsID &&
+		(v.role == models.RoleOwner || v.role == models.RoleManager)
+}
+
+func (s *TaskListService) revealCustomerData(list *models.TaskList, userID uint) *models.TaskList {
+	list.CustomerDataVisible = s.viewerOf(userID).canSeeCustomerData(list)
+	return list
+}
+
+func (s *TaskListService) CreateList(userID uint, in VehicleInput) (*models.TaskList, error) {
+	if in.Title == "" {
+		return nil, ErrTitleRequired
 	}
 	if err := s.requireManager(userID); err != nil {
 		return nil, err
 	}
 
-	wsID := s.workspaceID(userID)
-	position, err := s.listRepo.NextPosition(userID, wsID)
-	if err != nil {
+	list := &models.TaskList{
+		Title:    in.Title,
+		Plate:    normalizePlate(in.Plate),
+		Customer: normalizeCustomer(in.Customer),
+		UserID:   userID,
+		Status:   models.StatusAguardandoBox,
+		Items:    []models.TaskItem{},
+		Notes:    []models.VehicleNote{},
+	}
+	if err := applyCustomerData(list, in); err != nil {
 		return nil, err
 	}
 
-	list := &models.TaskList{
-		Title:       title,
-		Plate:       normalizePlate(plate),
-		Customer:    normalizeCustomer(customer),
-		UserID:      userID,
-		WorkspaceID: wsID,
-		Position:    position,
-		Status:      models.StatusAguardandoBox,
-		Items:       []models.TaskItem{},
-		Notes:       []models.VehicleNote{},
+	list.WorkspaceID = s.workspaceID(userID)
+	position, err := s.listRepo.NextPosition(userID, list.WorkspaceID)
+	if err != nil {
+		return nil, err
 	}
+	list.Position = position
+
 	if err := s.listRepo.Create(list); err != nil {
 		return nil, err
 	}
-	return list, nil
+	return s.revealCustomerData(list, userID), nil
 }
 
 type PaginatedTaskLists struct {
@@ -165,6 +245,10 @@ func (s *TaskListService) ListAll(userID uint, search string, page, limit int, s
 	if err != nil {
 		return nil, err
 	}
+	v := s.viewerOf(userID)
+	for i := range lists {
+		lists[i].CustomerDataVisible = v.canSeeCustomerData(&lists[i])
+	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
@@ -189,12 +273,17 @@ func (s *TaskListService) resolveList(listID, userID uint) (*models.TaskList, er
 }
 
 func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error) {
-	return s.resolveList(listID, userID)
+	list, err := s.resolveList(listID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.revealCustomerData(list, userID), nil
 }
 
-func (s *TaskListService) UpdateList(listID, userID uint, title, plate, customer string) (*models.TaskList, error) {
-	if title == "" {
-		return nil, errors.New("título é obrigatório")
+// UpdateList substitui title, plate e customer; os demais campos só mudam se vierem no input.
+func (s *TaskListService) UpdateList(listID, userID uint, in VehicleInput) (*models.TaskList, error) {
+	if in.Title == "" {
+		return nil, ErrTitleRequired
 	}
 	if err := s.requireManager(userID); err != nil {
 		return nil, err
@@ -205,13 +294,16 @@ func (s *TaskListService) UpdateList(listID, userID uint, title, plate, customer
 		return nil, err
 	}
 
-	list.Title = title
-	list.Plate = normalizePlate(plate)
-	list.Customer = normalizeCustomer(customer)
+	if err := applyCustomerData(list, in); err != nil {
+		return nil, err
+	}
+	list.Title = in.Title
+	list.Plate = normalizePlate(in.Plate)
+	list.Customer = normalizeCustomer(in.Customer)
 	if err := s.listRepo.Update(list); err != nil {
 		return nil, err
 	}
-	return list, nil
+	return s.revealCustomerData(list, userID), nil
 }
 
 func (s *TaskListService) DeleteList(listID, userID uint) error {

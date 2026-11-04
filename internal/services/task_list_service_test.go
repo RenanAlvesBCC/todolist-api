@@ -163,7 +163,7 @@ func TestTaskListService_CreateList_Success(t *testing.T) {
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
 
-	list, err := service.CreateList(1, "Compras da semana", "", "")
+	list, err := service.CreateList(1, VehicleInput{Title: "Compras da semana", Plate: "", Customer: ""})
 
 	require.NoError(t, err)
 	assert.Equal(t, uint(1), list.ID)
@@ -181,7 +181,7 @@ func TestTaskListService_CreateList_NormalizesPlateAndCustomer(t *testing.T) {
 	}
 	service := NewTaskListService(store, &mockTaskItemStore{}, nil)
 
-	list, err := service.CreateList(1, "Fusca", "  abc-1d23  ", "  Ana  ")
+	list, err := service.CreateList(1, VehicleInput{Title: "Fusca", Plate: "  abc-1d23  ", Customer: "  Ana  "})
 	require.NoError(t, err)
 	assert.Equal(t, "ABC-1D23", list.Plate)
 	assert.Equal(t, "Ana", list.Customer)
@@ -190,7 +190,7 @@ func TestTaskListService_CreateList_NormalizesPlateAndCustomer(t *testing.T) {
 func TestTaskListService_CreateList_EmptyTitleReturnsError(t *testing.T) {
 	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, nil)
 
-	_, err := service.CreateList(1, "", "", "")
+	_, err := service.CreateList(1, VehicleInput{Title: "", Plate: "", Customer: ""})
 
 	assert.EqualError(t, err, "título é obrigatório")
 }
@@ -316,11 +316,11 @@ func TestTaskListService_ReorderLists_ManagerMovesSubsetCreatedByOwner(t *testin
 	}
 	svc := NewTaskListService(repo, repository.NewTaskItemRepository(db), ws)
 
-	a, err := svc.CreateList(1, "A", "", "")
+	a, err := svc.CreateList(1, VehicleInput{Title: "A", Plate: "", Customer: ""})
 	require.NoError(t, err)
-	delivered, err := svc.CreateList(2, "B entregue", "", "")
+	delivered, err := svc.CreateList(2, VehicleInput{Title: "B entregue", Plate: "", Customer: ""})
 	require.NoError(t, err)
-	c, err := svc.CreateList(1, "C", "", "")
+	c, err := svc.CreateList(1, VehicleInput{Title: "C", Plate: "", Customer: ""})
 	require.NoError(t, err)
 	assert.Equal(t, []int{0, 1, 2}, []int{a.Position, delivered.Position, c.Position}, "cada novo veículo vai para o fim do pátio")
 
@@ -437,7 +437,7 @@ func TestTaskListService_CreateList_EditorForbidden(t *testing.T) {
 	}
 	service := NewTaskListService(&mockTaskListStore{}, &mockTaskItemStore{}, ws)
 
-	_, err := service.CreateList(5, "Gol 2012", "", "")
+	_, err := service.CreateList(5, VehicleInput{Title: "Gol 2012", Plate: "", Customer: ""})
 
 	assert.ErrorIs(t, err, ErrNotManager)
 }
@@ -496,13 +496,13 @@ func TestTaskListService_UpdateList_Success(t *testing.T) {
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, nil)
 
-	list, err := svc.UpdateList(1, 1, "Civic", "abc-1234", "  Maria  ")
+	list, err := svc.UpdateList(1, 1, VehicleInput{Title: "Civic", Plate: "abc-1234", Customer: "  Maria  "})
 	require.NoError(t, err)
 	assert.Equal(t, "Civic", list.Title)
 	assert.Equal(t, "ABC-1234", list.Plate)
 	assert.Equal(t, "Maria", list.Customer)
 
-	_, err = svc.UpdateList(1, 1, "", "", "")
+	_, err = svc.UpdateList(1, 1, VehicleInput{Title: "", Plate: "", Customer: ""})
 	assert.EqualError(t, err, "título é obrigatório")
 }
 
@@ -630,7 +630,7 @@ func TestTaskListService_CreateList_WithWorkspace(t *testing.T) {
 		memberRole: map[uint]models.WorkspaceRole{1: models.RoleOwner},
 	}
 	svc := NewTaskListService(store, &mockTaskItemStore{}, ws)
-	list, err := svc.CreateList(1, "Gol", "xyz-9876", "João")
+	list, err := svc.CreateList(1, VehicleInput{Title: "Gol", Plate: "xyz-9876", Customer: "João"})
 	require.NoError(t, err)
 	require.NotNil(t, list.WorkspaceID)
 	assert.Equal(t, wsID, *list.WorkspaceID)

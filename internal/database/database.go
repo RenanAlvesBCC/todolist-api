@@ -19,6 +19,17 @@ func Connect() {
 		log.Fatal("Falha ao conectar ao banco de dados: ", err)
 	}
 
+	if err := migrate(db); err != nil {
+		log.Fatal("Falha ao migrar o banco de dados: ", err)
+	}
+
+	DB = db
+	log.Println("Banco de dados conectado e migrado com sucesso")
+}
+
+// migrate cria/atualiza as tabelas. Colunas novas NOT NULL com DEFAULT são
+// preenchidas com o default nas linhas existentes pelo próprio ALTER TABLE.
+func migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Workspace{},
@@ -33,16 +44,14 @@ func Connect() {
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
 	); err != nil {
-		log.Fatal("Falha ao migrar o banco de dados: ", err)
+		return err
 	}
 
 	migrateLegacyStatuses(db)
 	if err := backfillDeliveredAt(db); err != nil {
 		log.Println("Aviso: falha ao preencher delivered_at: ", err)
 	}
-
-	DB = db
-	log.Println("Banco de dados conectado e migrado com sucesso")
+	return nil
 }
 
 func migrateLegacyStatuses(db *gorm.DB) {

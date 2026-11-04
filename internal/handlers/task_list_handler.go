@@ -15,10 +15,10 @@ import (
 
 // TaskListProvider descreve o que o handler precisa do service de listas.
 type TaskListProvider interface {
-	CreateList(userID uint, title, plate, customer string) (*models.TaskList, error)
+	CreateList(userID uint, in services.VehicleInput) (*models.TaskList, error)
 	ListAll(userID uint, search string, page, limit int, status string, mine bool) (*services.PaginatedTaskLists, error)
 	GetList(listID, userID uint) (*models.TaskList, error)
-	UpdateList(listID, userID uint, title, plate, customer string) (*models.TaskList, error)
+	UpdateList(listID, userID uint, in services.VehicleInput) (*models.TaskList, error)
 	DeleteList(listID, userID uint) error
 	AddItem(listID, userID uint, text string) (*models.TaskItem, error)
 	UpdateItem(listID, itemID, userID uint, text string, completed bool) (*models.TaskItem, error)
@@ -41,10 +41,39 @@ func getUserID(c *gin.Context) uint {
 	return uint(userIDFloat)
 }
 
+// Ponteiros distinguem chave ausente (nil: no PUT mantém o valor) de chave enviada, mesmo "".
 type listInput struct {
-	Title    string `json:"title" binding:"required"`
-	Plate    string `json:"plate"`
-	Customer string `json:"customer"`
+	Title            string  `json:"title" binding:"required"`
+	Plate            string  `json:"plate"`
+	Customer         string  `json:"customer"`
+	CustomerCPF      *string `json:"customer_cpf"`
+	CustomerCEP      *string `json:"customer_cep"`
+	CustomerWhatsApp *string `json:"customer_whatsapp"`
+}
+
+func (in listInput) toVehicleInput() services.VehicleInput {
+	return services.VehicleInput{
+		Title:            in.Title,
+		Plate:            in.Plate,
+		Customer:         in.Customer,
+		CustomerCPF:      in.CustomerCPF,
+		CustomerCEP:      in.CustomerCEP,
+		CustomerWhatsApp: in.CustomerWhatsApp,
+	}
+}
+
+func isVehicleValidationError(err error) bool {
+	for _, target := range []error{
+		services.ErrTitleRequired,
+		services.ErrInvalidCPF,
+		services.ErrInvalidCEP,
+		services.ErrInvalidWhatsApp,
+	} {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }
 
 type createItemInput struct {
@@ -63,7 +92,7 @@ func (h *TaskListHandler) Create(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.CreateList(getUserID(c), input.Title, input.Plate, input.Customer)
+	list, err := h.listService.CreateList(getUserID(c), input.toVehicleInput())
 	if err != nil {
 		if errors.Is(err, services.ErrNotManager) {
 			utils.RespondError(c, http.StatusForbidden, err.Error())
@@ -118,10 +147,14 @@ func (h *TaskListHandler) Update(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.Title, input.Plate, input.Customer)
+	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.toVehicleInput())
 	if err != nil {
 		if errors.Is(err, services.ErrNotManager) {
 			utils.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
+		if isVehicleValidationError(err) {
+			utils.RespondError(c, http.StatusBadRequest, err.Error())
 			return
 		}
 		utils.RespondError(c, http.StatusNotFound, err.Error())

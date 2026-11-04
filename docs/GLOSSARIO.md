@@ -11,6 +11,7 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Veículo / carro na esteira | `TaskList`, `/api/lists` |
 | Placa | `plate` |
 | Cliente | `customer` |
+| Dados do cliente (CPF, CEP, WhatsApp — LGPD; só dono/gerente veem) | `customer_cpf`, `customer_cep`, `customer_whatsapp` (só dígitos) |
 | Serviço (item de trabalho) | `TaskItem`, `/api/lists/:id/items` |
 | Mecânico atribuído | `ListAssignment`, `/assignments` |
 | Linha de orçamento | `QuoteItem`, `/quotes` |
