@@ -72,8 +72,10 @@ type TaskList struct {
 	WorkspaceID      *uint           `json:"workspace_id"`
 	Status           TaskListStatus  `gorm:"not null;default:'aguardando_box'" json:"status"`
 	Priority         VehiclePriority `gorm:"not null;default:'normal'" json:"priority"`
-	Position         int             `gorm:"not null;default:0" json:"position"`
-	DeliveredAt      *time.Time      `gorm:"index" json:"delivered_at"`
+	// Quilometragem em km; null enquanto não informada.
+	Mileage     *int       `json:"mileage"`
+	Position    int        `gorm:"not null;default:0" json:"position"`
+	DeliveredAt *time.Time `gorm:"index" json:"delivered_at"`
 	// Vídeo de check-up: null enquanto ninguém marcou como feito.
 	CheckupVideoDoneAt *time.Time `json:"checkup_video_done_at"`
 	CheckupVideoDoneBy *uint      `json:"checkup_video_done_by"`

@@ -91,7 +91,11 @@ func normalizeCustomer(customer string) string {
 var (
 	ErrTitleRequired   = errors.New("título é obrigatório")
 	ErrInvalidPriority = errors.New("prioridade inválida")
+	ErrInvalidMileage  = errors.New("quilometragem inválida")
 )
+
+// MaxMileage é a maior quilometragem aceita (km).
+const MaxMileage = 2000000
 
 // VehicleInput é a ficha do veículo enviada no create/update.
 // Nos campos ponteiro, nil = chave ausente (no update mantém o valor atual).
@@ -103,6 +107,7 @@ type VehicleInput struct {
 	CustomerCEP      *string
 	CustomerWhatsApp *string
 	Priority         *string
+	Mileage          *int
 }
 
 func parsePriority(value string) (models.VehiclePriority, error) {
@@ -123,10 +128,17 @@ func applyOptionalFields(list *models.TaskList, in VehicleInput) error {
 		}
 		priority = p
 	}
+	if in.Mileage != nil && (*in.Mileage < 0 || *in.Mileage > MaxMileage) {
+		return ErrInvalidMileage
+	}
 	if err := applyCustomerData(list, in); err != nil {
 		return err
 	}
 	list.Priority = priority
+	if in.Mileage != nil {
+		km := *in.Mileage
+		list.Mileage = &km
+	}
 	return nil
 }
 

@@ -127,11 +127,12 @@ Cria veículo. Só `owner`/`manager`. Body:
   "customer_cpf": "123.456.789-09",
   "customer_cep": "01310-100",
   "customer_whatsapp": "+55 (11) 98765-4321",
-  "priority": "alta"
+  "priority": "alta",
+  "mileage": 87500
 }
 ```
 
-Só `title` é obrigatório; os demais têm default `""` (`priority`: default `normal`; valor fora do enum → 400 `prioridade inválida`). Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
+Só `title` é obrigatório; os demais têm default `""` (`priority`: default `normal`; valor fora do enum → 400 `prioridade inválida`; `mileage`: default `null`, regras em [Quilometragem](#quilometragem)). Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
 
 ### GET /api/lists/:id
 Detalhe. Mecânico só se atribuído ou membro com acesso ao veículo da esteira.
@@ -142,8 +143,22 @@ Ficha do veículo. Só `owner`/`manager`; mecânico só lê (403).
 - `title` (obrigatório), `plate` e `customer` são **substituídos** sempre (como antes).
 - `customer_cpf`, `customer_cep`, `customer_whatsapp` são opcionais: **chave ausente (ou `null`) mantém o valor atual**; chave presente grava, e `""` limpa.
 - `priority` também é opcional: ausente (ou `null`) mantém; presente precisa ser um valor válido do enum.
-- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp nem a prioridade.
-- 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `prioridade inválida`); nada é gravado se algum campo for inválido.
+- `mileage` também é opcional: ausente (ou `null`) mantém; número inteiro válido grava (inclusive `0`). **Não há como voltar para `null` pelo PUT** — só sobrescrever com outro valor.
+- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp, a prioridade nem a quilometragem.
+- 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `prioridade inválida`, `quilometragem inválida`); nada é gravado se algum campo for inválido.
+
+### Quilometragem
+
+`mileage`: quilometragem do veículo em km, inteiro ou `null` (não informada). Visível para **todos os papéis** (dono, gerente e mecânico), em todas as respostas que devolvem veículo. Só dono/gerente gravam (`POST /api/lists` e `PUT /api/lists/:id`).
+
+- Aceita apenas **número JSON inteiro** de `0` a `2000000`.
+- 400 `{ "error": "quilometragem inválida" }` para negativo, acima de `2000000`, decimal (`12.5`), notação científica (`1e3`), string (`"87500"`), booleano, objeto ou array.
+- `null` (ou chave ausente) = não informar: no POST fica `null`; no PUT mantém o valor atual.
+
+```json
+{ "id": 7, "title": "Gol 2012", "mileage": 87500 }
+{ "id": 8, "title": "Uno 2015", "mileage": null }
+```
 
 ### PUT /api/lists/:id/priority
 Body: `{ "priority": "alta" }`. Só `owner`/`manager`.
@@ -316,11 +331,13 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `position`, `delivered_at`, `checkup_video_done_at`, `checkup_video_done_by`, `checkup_video_done_by_name`, `items[]`, `assignments[]`, `notes[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `mileage`, `position`, `delivered_at`, `checkup_video_done_at`, `checkup_video_done_by`, `checkup_video_done_by_name`, `items[]`, `assignments[]`, `notes[]`.
 
 \* Só para `owner`/`manager` (ver [Dados do cliente](#dados-do-cliente-lgpd)); ausentes para o mecânico. Veículos antigos recebem `""` na migração.
 
 `priority`: `normal` | `alta` | `urgente`; veículos antigos recebem `normal` na migração.
+
+`mileage`: km (inteiro) ou `null`; sempre presente e visível para todos os papéis. Veículos antigos ficam `null` na migração (coluna nova, nullable). Ver [Quilometragem](#quilometragem).
 
 `checkup_video_done_at` / `checkup_video_done_by` / `checkup_video_done_by_name`: sempre presentes; `null` enquanto o vídeo não foi marcado (inclusive veículos antigos). Visíveis para todos os papéis.
 
@@ -330,7 +347,7 @@ Exemplo completo — dono/gerente:
 {
   "id": 7, "title": "Gol 2012", "plate": "ABC1D23", "customer": "Maria Souza",
   "customer_cpf": "12345678909", "customer_cep": "01310100", "customer_whatsapp": "11987654321",
-  "status": "em_andamento", "priority": "alta", "position": 0, "delivered_at": null,
+  "status": "em_andamento", "priority": "alta", "mileage": 87500, "position": 0, "delivered_at": null,
   "checkup_video_done_at": "2026-11-04T14:30:00Z", "checkup_video_done_by": 3, "checkup_video_done_by_name": "Ana Silva",
   "items": [], "assignments": [{ "id": 1, "task_list_id": 7, "user_id": 3, "assigned_by": 1, "assigned_at": "..." }], "notes": []
 }
@@ -344,7 +361,7 @@ Mecânico atribuído (mesmo veículo): idêntico, **sem** `customer_cpf`, `custo
 | --- | --- | --- | --- |
 | Ver veículo (`GET /api/lists`, `/:id`) | pátio inteiro | pátio inteiro | só atribuídos (outros → 404) |
 | Ver `customer_cpf` / `customer_cep` / `customer_whatsapp` | sim | sim | **nunca** (chaves omitidas) |
-| Ver `priority` e `checkup_video_*` | sim | sim | sim |
+| Ver `priority`, `mileage` e `checkup_video_*` | sim | sim | sim |
 | Criar / editar ficha (`POST /api/lists`, `PUT /:id`) | sim | sim | 403 |
 | `PUT /:id/priority` | sim | sim | 403 |
 | `PUT /:id/checkup-video` | sim | sim | só atribuídos (outros → 404) |
@@ -366,7 +383,7 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 
 ## Erros comuns
 
-- 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, ...)
+- 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `quilometragem inválida`, ...)
 - 401 token ausente, inválido ou na blacklist
 - 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)

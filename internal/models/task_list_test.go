@@ -34,6 +34,17 @@ func TestTaskListMarshalJSON_CustomerDataHiddenByDefault(t *testing.T) {
 	assert.Equal(t, "Maria", body["customer"])
 }
 
+func TestTaskListMarshalJSON_MileageAlwaysPresent(t *testing.T) {
+	km := 87000
+	for _, visible := range []bool{true, false} {
+		assert.Equal(t, float64(87000), marshalToMap(t, TaskList{Title: "Gol", Mileage: &km, CustomerDataVisible: visible})["mileage"])
+
+		body := marshalToMap(t, TaskList{Title: "Gol", CustomerDataVisible: visible})
+		assert.Contains(t, body, "mileage")
+		assert.Nil(t, body["mileage"])
+	}
+}
+
 func TestIsValidVehiclePriority(t *testing.T) {
 	for _, p := range []VehiclePriority{PriorityNormal, PriorityAlta, PriorityUrgente} {
 		assert.True(t, IsValidVehiclePriority(p))

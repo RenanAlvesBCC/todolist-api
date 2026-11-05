@@ -11,6 +11,7 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Veículo / carro na esteira | `TaskList`, `/api/lists` |
 | Placa | `plate` |
 | Cliente | `customer` |
+| Quilometragem (km rodados do veículo) | `mileage` (inteiro ou `null`) |
 | Dados do cliente (CPF, CEP, WhatsApp — LGPD; só dono/gerente veem) | `customer_cpf`, `customer_cep`, `customer_whatsapp` (só dígitos) |
 | Serviço (item de trabalho) | `TaskItem`, `/api/lists/:id/items` |
 | Mecânico atribuído | `ListAssignment`, `/assignments` |
@@ -43,6 +44,10 @@ Data de entrega: `delivered_at` no veículo, preenchido ao entrar em `entregue` 
 ## Prioridade do veículo
 
 `priority`: `normal` (default) | `alta` | `urgente`. Definida pelo dono/gerente (`PUT /api/lists/:id/priority` ou na ficha); mecânico só vê. Não muda a ordem do pátio (continua por `position`).
+
+## Quilometragem
+
+`mileage`: km do veículo, inteiro de `0` a `2000000`, ou `null` quando não informada (inclusive veículos antigos). Dono/gerente informam na criação ou na ficha (`PUT /api/lists/:id`); todos os papéis veem. Na ficha, omitir (ou mandar `null`) mantém o valor; não dá para voltar a `null`, só sobrescrever.
 
 ## Vídeo de check-up
 

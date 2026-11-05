@@ -134,7 +134,8 @@ Content-Type: application/json
   "customer": "João Silva",
   "customer_cpf": "123.456.789-09",
   "customer_cep": "01310-100",
-  "customer_whatsapp": "+55 (11) 98765-4321"
+  "customer_whatsapp": "+55 (11) 98765-4321",
+  "mileage": 87500
 }
 
 ### Criar veiculo com CPF invalido (400)
@@ -193,6 +194,28 @@ Content-Type: application/json
   "customer": "João Silva",
   "customer_cep": "",
   "customer_whatsapp": "(11) 3456-7890"
+}
+
+### Atualizar quilometragem (ausente ou null mantem; numero grava)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 revisao",
+  "plate": "ABC-1234",
+  "customer": "João Silva",
+  "mileage": 91200
+}
+
+### Quilometragem invalida (400 quilometragem inválida: negativa, > 2000000, decimal ou string)
+PUT {{baseUrl}}/api/lists/{{createList.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Fusca 1972 revisao",
+  "mileage": "91200"
 }
 
 ### Alterar prioridade (normal | alta | urgente)

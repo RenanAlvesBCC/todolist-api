@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -52,9 +53,15 @@ type listInput struct {
 	CustomerCEP      *string `json:"customer_cep"`
 	CustomerWhatsApp *string `json:"customer_whatsapp"`
 	Priority         *string `json:"priority"`
+	// Cru para responder "quilometragem inválida" (e não erro de bind) a string, decimal etc.
+	Mileage json.RawMessage `json:"mileage"`
 }
 
-func (in listInput) toVehicleInput() services.VehicleInput {
+func (in listInput) toVehicleInput() (services.VehicleInput, error) {
+	mileage, err := parseMileage(in.Mileage)
+	if err != nil {
+		return services.VehicleInput{}, err
+	}
 	return services.VehicleInput{
 		Title:            in.Title,
 		Plate:            in.Plate,
@@ -63,13 +70,27 @@ func (in listInput) toVehicleInput() services.VehicleInput {
 		CustomerCEP:      in.CustomerCEP,
 		CustomerWhatsApp: in.CustomerWhatsApp,
 		Priority:         in.Priority,
+		Mileage:          mileage,
+	}, nil
+}
+
+// parseMileage: chave ausente ou null = nil; senão só número JSON inteiro (a faixa fica no service).
+func parseMileage(raw json.RawMessage) (*int, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
 	}
+	km, err := strconv.Atoi(string(raw))
+	if err != nil {
+		return nil, services.ErrInvalidMileage
+	}
+	return &km, nil
 }
 
 func isVehicleValidationError(err error) bool {
 	for _, target := range []error{
 		services.ErrTitleRequired,
 		services.ErrInvalidPriority,
+		services.ErrInvalidMileage,
 		services.ErrInvalidCPF,
 		services.ErrInvalidCEP,
 		services.ErrInvalidWhatsApp,
@@ -97,7 +118,13 @@ func (h *TaskListHandler) Create(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.CreateList(getUserID(c), input.toVehicleInput())
+	in, err := input.toVehicleInput()
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	list, err := h.listService.CreateList(getUserID(c), in)
 	if err != nil {
 		if errors.Is(err, services.ErrNotManager) {
 			utils.RespondError(c, http.StatusForbidden, err.Error())
@@ -152,7 +179,13 @@ func (h *TaskListHandler) Update(c *gin.Context) {
 		return
 	}
 
-	list, err := h.listService.UpdateList(uint(id), getUserID(c), input.toVehicleInput())
+	in, err := input.toVehicleInput()
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	list, err := h.listService.UpdateList(uint(id), getUserID(c), in)
 	if err != nil {
 		respondVehicleMutationError(c, err)
 		return

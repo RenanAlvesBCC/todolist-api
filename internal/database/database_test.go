@@ -113,8 +113,13 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 	require.NotNil(t, priority)
 	assert.Equal(t, "normal", *priority)
 
+	var mileage *int
+	require.NoError(t, db.Raw("SELECT mileage FROM task_lists WHERE id = ?", old.ID).Scan(&mileage).Error)
+	assert.Nil(t, mileage, "veículo antigo fica sem quilometragem (NULL)")
+
 	got := loadVehicle(t, db, old.ID)
 	assert.Equal(t, models.PriorityNormal, got.Priority)
+	assert.Nil(t, got.Mileage)
 	assert.Nil(t, got.CheckupVideoDoneAt, "vídeo de check-up começa pendente")
 	assert.Nil(t, got.CheckupVideoDoneBy)
 	assert.Equal(t, "Fusca", got.Title)
@@ -126,6 +131,7 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 	got = loadVehicle(t, db, fresh.ID)
 	assert.Equal(t, "", got.CustomerCPF)
 	assert.Equal(t, models.PriorityNormal, got.Priority)
+	assert.Nil(t, got.Mileage)
 }
 
 func TestMigrateLegacyStatuses_ConcluidoKeepsOriginalUpdatedAtAsDeliveredAt(t *testing.T) {
