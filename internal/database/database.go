@@ -43,6 +43,11 @@ func migrate(db *gorm.DB) error {
 		&models.VehicleNote{},
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
+		&models.Customer{},
+		&models.CustomerVehicle{},
+		&models.ServiceRecord{},
+		&models.SyncRun{},
+		&models.IntegrationToken{},
 	); err != nil {
 		return err
 	}

@@ -72,6 +72,9 @@ type TaskList struct {
 	WorkspaceID      *uint           `json:"workspace_id"`
 	Status           TaskListStatus  `gorm:"not null;default:'aguardando_box'" json:"status"`
 	Priority         VehiclePriority `gorm:"not null;default:'normal'" json:"priority"`
+	// Vínculo com o cadastro de clientes; só ids (não são dado pessoal), visíveis a todos.
+	CustomerID        *uint `gorm:"index" json:"customer_id"`
+	CustomerVehicleID *uint `gorm:"index" json:"customer_vehicle_id"`
 	// Quilometragem em km; null enquanto não informada.
 	Mileage     *int       `json:"mileage"`
 	Position    int        `gorm:"not null;default:0" json:"position"`

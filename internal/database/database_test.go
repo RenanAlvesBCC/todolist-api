@@ -134,6 +134,78 @@ func TestMigrate_ExistingVehiclesGetNewColumnDefaults(t *testing.T) {
 	assert.Nil(t, got.Mileage)
 }
 
+func TestMigrate_CustomerTablesDefaultsAndUniqueness(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+
+	require.NoError(t, db.AutoMigrate(&legacyTaskList{}))
+	old := legacyTaskList{Title: "Fusca", UserID: 1, Status: "em_andamento"}
+	require.NoError(t, db.Create(&old).Error)
+	require.NoError(t, migrate(db))
+	require.NoError(t, migrate(db), "migração é idempotente")
+
+	got := loadVehicle(t, db, old.ID)
+	assert.Nil(t, got.CustomerID, "atendimento antigo fica sem cliente")
+	assert.Nil(t, got.CustomerVehicleID)
+
+	// Cliente local mínimo: defaults vazios, sem source_id.
+	c := &models.Customer{WorkspaceID: 1, Name: "Maria"}
+	require.NoError(t, db.Create(c).Error)
+	var loaded models.Customer
+	require.NoError(t, db.First(&loaded, c.ID).Error)
+	assert.Equal(t, models.SourceLocal, loaded.Source)
+	assert.Nil(t, loaded.SourceID)
+	assert.Equal(t, "", loaded.CPF)
+	assert.Nil(t, loaded.BirthDate)
+	assert.Nil(t, loaded.SyncedAt)
+
+	// Vários clientes sem source_id e sem CPF convivem; CPF repetido na oficina não.
+	require.NoError(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "João"}).Error)
+	require.NoError(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "Ana", CPF: "12345678909"}).Error)
+	assert.Error(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "Bia", CPF: "12345678909"}).Error)
+	require.NoError(t, db.Create(&models.Customer{WorkspaceID: 2, Name: "Bia", CPF: "12345678909"}).Error, "outra oficina pode repetir")
+
+	sid := "123"
+	require.NoError(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "X", Source: models.SourceOnMotor, SourceID: &sid}).Error)
+	assert.Error(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "Y", Source: models.SourceOnMotor, SourceID: &sid}).Error)
+
+	birth := models.NewDate(time.Date(1980, 5, 3, 0, 0, 0, 0, time.UTC))
+	withBirth := &models.Customer{WorkspaceID: 1, Name: "Zé", BirthDate: &birth}
+	require.NoError(t, db.Create(withBirth).Error)
+	var loadedBirth models.Customer
+	require.NoError(t, db.First(&loadedBirth, withBirth.ID).Error)
+	require.NotNil(t, loadedBirth.BirthDate)
+	assert.Equal(t, "1980-05-03", loadedBirth.BirthDate.String())
+
+	// Placa única por oficina quando preenchida; sem placa pode repetir.
+	require.NoError(t, db.Create(&models.CustomerVehicle{WorkspaceID: 1, Plate: "ABC1D23"}).Error)
+	assert.Error(t, db.Create(&models.CustomerVehicle{WorkspaceID: 1, Plate: "ABC1D23"}).Error)
+	require.NoError(t, db.Create(&models.CustomerVehicle{WorkspaceID: 1}).Error)
+	require.NoError(t, db.Create(&models.CustomerVehicle{WorkspaceID: 1}).Error)
+
+	sr := &models.ServiceRecord{WorkspaceID: 1, SourceID: "os-1"}
+	require.NoError(t, db.Create(sr).Error)
+	var loadedSR models.ServiceRecord
+	require.NoError(t, db.First(&loadedSR, sr.ID).Error)
+	assert.Equal(t, models.SourceOnMotor, loadedSR.Source)
+	assert.Equal(t, models.JSONText("[]"), loadedSR.Items)
+	assert.Error(t, db.Create(&models.ServiceRecord{WorkspaceID: 1, SourceID: "os-1"}).Error)
+
+	run := &models.SyncRun{WorkspaceID: 1, StartedAt: time.Now()}
+	require.NoError(t, db.Create(run).Error)
+	var loadedRun models.SyncRun
+	require.NoError(t, db.First(&loadedRun, run.ID).Error)
+	assert.Equal(t, models.SyncStatusRunning, loadedRun.Status)
+	assert.Equal(t, models.StringList{}, loadedRun.Warnings)
+	assert.Equal(t, 0, loadedRun.Skipped)
+
+	require.NoError(t, db.Create(&models.IntegrationToken{WorkspaceID: 1, Name: "robô", TokenHash: "abc", CreatedBy: 1}).Error)
+	assert.Error(t, db.Create(&models.IntegrationToken{WorkspaceID: 1, Name: "outro", TokenHash: "abc", CreatedBy: 1}).Error)
+}
+
 func TestMigrateLegacyStatuses_ConcluidoKeepsOriginalUpdatedAtAsDeliveredAt(t *testing.T) {
 	db := setupTestDB(t)
 	oldUpdate := time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)

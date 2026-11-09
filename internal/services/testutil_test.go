@@ -33,6 +33,11 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.VehicleNote{},
 		&models.TokenBlacklist{},
 		&models.AuditLog{},
+		&models.Customer{},
+		&models.CustomerVehicle{},
+		&models.ServiceRecord{},
+		&models.SyncRun{},
+		&models.IntegrationToken{},
 	)
 	require.NoError(t, err)
 
