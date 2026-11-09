@@ -20,6 +20,7 @@ func SetupRoutes(
 	noteHandler *handlers.VehicleNoteHandler,
 	customerHandler *handlers.CustomerHandler,
 	customerVehicleHandler *handlers.CustomerVehicleHandler,
+	tokenHandler *handlers.IntegrationTokenHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.CORS())
@@ -100,5 +101,10 @@ func SetupRoutes(
 		protected.GET("/customer-vehicles/lookup", customerVehicleHandler.Lookup)
 		protected.PUT("/customer-vehicles/:id", customerVehicleHandler.Update)
 		protected.GET("/customer-vehicles/:id/history", customerVehicleHandler.History)
+
+		// Tokens de integração (só dono; o texto do token só aparece na criação)
+		protected.GET("/integrations/tokens", tokenHandler.List)
+		protected.POST("/integrations/tokens", tokenHandler.Create)
+		protected.DELETE("/integrations/tokens/:id", tokenHandler.Revoke)
 	}
 }

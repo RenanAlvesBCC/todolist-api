@@ -550,3 +550,19 @@ Content-Type: application/json
   "customer_vehicle_id": {{createCustomerVehicle.response.body.id}},
   "mileage": 91000
 }
+
+### ---- Tokens de integracao (so dono) ----
+
+### Criar token (o texto so aparece nesta resposta)
+# @name createIntegrationToken
+POST {{baseUrl}}/api/integrations/tokens
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Robo OnMotor"
+}
+
+### Listar tokens (sem texto nem hash)
+GET {{baseUrl}}/api/integrations/tokens
+Authorization: Bearer {{loginOwner.response.body.token}}

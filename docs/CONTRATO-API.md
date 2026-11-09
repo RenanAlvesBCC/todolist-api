@@ -464,6 +464,25 @@ Histórico do carro juntando (a) OS importadas do OnMotor e (b) nossos atendimen
 - `summary`: notas da OS ou, sem notas, até 3 descrições de itens; no nosso atendimento, até 3 serviços (`items` da esteira) ou o título. Máx. 200 caracteres.
 - `items` só para `onmotor` (formato flexível, como importado); `null` para `rmaxx`.
 
+## Tokens de integração (só owner)
+
+Credencial do robô de sincronização (máquina a máquina). Só o **dono** cria, lista e revoga (gerente e mecânico → 403). A API guarda apenas o **hash SHA-256** do token; o texto aparece **uma única vez**, na resposta do POST. Guarde-o num cofre/variável de ambiente do robô.
+
+### GET /api/integrations/tokens
+200 `{ "tokens": [ { "id": 3, "workspace_id": 1, "name": "Robô OnMotor", "last_used_at": "2026-11-09T18:00:00Z", "created_by": 1, "created_at": "...", "revoked_at": null } ] }` — mais novos primeiro, inclusive revogados. Nunca traz o token nem o hash.
+
+### POST /api/integrations/tokens
+Body `{ "name": "Robô OnMotor" }` (obrigatório, até 100 caracteres). 201:
+
+```json
+{ "id": 3, "name": "Robô OnMotor", "token": "rmx_2r9Qk0...43 caracteres base64url", "created_at": "2026-11-09T18:00:00Z" }
+```
+
+O token tem o prefixo `rmx_` + 32 bytes aleatórios em base64url.
+
+### DELETE /api/integrations/tokens/:id
+Revoga (204). Idempotente; token de outra oficina/inexistente → 404. Token revogado passa a receber 401 na importação.
+
 ## Auditoria (owner/manager)
 
 ### GET /api/audit

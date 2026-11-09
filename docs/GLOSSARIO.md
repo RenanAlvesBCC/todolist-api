@@ -15,6 +15,7 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Cliente (cadastro permanente da oficina, com documentos e contatos — LGPD; só dono/gerente) | `Customer`, `/api/customers` |
 | Veículo do cliente (cadastro permanente do carro; placa única por oficina) | `CustomerVehicle`, `/api/customers/:id/vehicles`, `/api/customer-vehicles` |
 | Histórico do veículo (OS do OnMotor + nossos atendimentos, mais recentes primeiro) | `ServiceRecord` + `TaskList`, `GET /api/customer-vehicles/:id/history` |
+| Token de integração (credencial do robô; só o dono cria/revoga; só o hash fica no banco; texto `rmx_...` aparece uma vez) | `IntegrationToken`, `/api/integrations/tokens` |
 | Origem do cadastro (`local` = criado aqui; `onmotor` = importado, `source_id` = id no OnMotor) | `source`, `source_id` |
 | Quilometragem (km rodados do veículo) | `mileage` (inteiro ou `null`) |
 | Dados do cliente (CPF, CEP, WhatsApp — LGPD; só dono/gerente veem) | `customer_cpf`, `customer_cep`, `customer_whatsapp` (só dígitos) |
