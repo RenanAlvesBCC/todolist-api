@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/RenanAlvesBCC/oficina-api/internal/models"
@@ -29,44 +30,120 @@ func snapshotCustomer(c *models.Customer) customerSnapshot {
 	return s
 }
 
-func (imp *importer) customer(pos int, rec ImportCustomer) error {
+// isOnMotorID: só ids numéricos do OnMotor aparecem nos avisos. Chaves derivadas
+// (cpf:..., nome:...|cel:..., placa:...) contêm dados pessoais e nunca são citadas.
+func isOnMotorID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, r := range id {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func recordLabel(kind string, pos int, sourceID string) string {
+	if isOnMotorID(sourceID) {
+		return kind + " OnMotor " + sourceID
+	}
+	return fmt.Sprintf("%s na posição %d do lote", kind, pos)
+}
+
+func referenceLabel(kind, sourceID string) string {
+	if isOnMotorID(sourceID) {
+		return kind + " OnMotor " + sourceID
+	}
+	return kind + " referenciado"
+}
+
+func describeCustomer(c *models.Customer) string {
+	switch {
+	case c.SourceID != nil && isOnMotorID(*c.SourceID):
+		return "OnMotor " + *c.SourceID
+	case c.ID == 0:
+		return "outro cliente do lote"
+	case c.Source == models.SourceLocal:
+		return fmt.Sprintf("local #%d", c.ID)
+	}
+	return fmt.Sprintf("#%d", c.ID)
+}
+
+func describeVehicle(v *models.CustomerVehicle) string {
+	switch {
+	case v.SourceID != nil && isOnMotorID(*v.SourceID):
+		return "OnMotor " + *v.SourceID
+	case v.ID == 0:
+		return "outro veículo do lote"
+	case v.Source == models.SourceLocal:
+		return fmt.Sprintf("local #%d", v.ID)
+	}
+	return fmt.Sprintf("#%d", v.ID)
+}
+
+// matchCustomer procura, para uma chave ainda desconhecida, um cadastro da mesma pessoa:
+// (a) mesmo CPF ou CNPJ; (b) cliente do OnMotor sem CPF/CNPJ com mesmo nome normalizado e celular.
+// Cadastro cuja chave atual também está no lote é outro registro vivo do OnMotor: não é adotado.
+func (imp *importer) matchCustomer(rec ImportCustomer) *trackedCustomer {
+	c := imp.cache
+	usable := func(tc *trackedCustomer) bool {
+		return tc != nil && (tc.row.SourceID == nil || !c.batchCustomerKeys[*tc.row.SourceID])
+	}
+	if cpf := validOrEmpty(rec.CPF, normalizeCPF); cpf != "" && usable(c.customerByCPF[cpf]) {
+		return c.customerByCPF[cpf]
+	}
+	if cnpj := validOrEmpty(rec.CNPJ, normalizeCNPJ); cnpj != "" && usable(c.customerByCNPJ[cnpj]) {
+		return c.customerByCNPJ[cnpj]
+	}
+	mobile, name := validOrEmpty(rec.Mobile, normalizeMobile), normalizeName(rec.Name.Value)
+	if mobile == "" || name == "" {
+		return nil
+	}
+	for _, tc := range c.customerByMobile[mobile] {
+		r := tc.row
+		if usable(tc) && r.Source == models.SourceOnMotor && r.CPF == "" && r.CNPJ == "" && normalizeName(r.Name) == name {
+			return tc
+		}
+	}
+	return nil
+}
+
+func (imp *importer) customer(pos int, rec ImportCustomer) {
 	sourceID := rec.SourceID.trimmed()
 	if sourceID == "" {
 		imp.skip("cliente na posição %d sem source_id (ignorado)", pos)
-		return nil
+		return
 	}
-	label := "cliente OnMotor " + sourceID
+	label := recordLabel("cliente", pos, sourceID)
 
-	target, err := imp.store.FindCustomerBySource(imp.wsID, models.SourceOnMotor, sourceID)
-	if err != nil {
-		return err
-	}
-	if target == nil && rec.CPF.Set {
-		// Cliente local (sem source_id) com o mesmo CPF: vira o registro do OnMotor em vez de duplicar.
-		if cpf, err := normalizeCPF(rec.CPF.Value); err == nil && cpf != "" {
-			local, err := imp.store.FindCustomerByCPF(imp.wsID, cpf)
-			if err != nil {
-				return err
-			}
-			if local != nil && local.SourceID == nil {
-				target = local
-			}
+	tc := imp.cache.customerBySource[sourceID]
+	if tc == nil {
+		if tc = imp.matchCustomer(rec); tc != nil && tc.row.SourceID != nil {
+			imp.keyChanges = append(imp.keyChanges, tc)
 		}
 	}
-	isNew := target == nil
+	isNew := tc == nil
 	if isNew {
 		if rec.Name.trimmed() == "" {
 			imp.skip("%s sem nome (ignorado)", label)
-			return nil
+			return
 		}
-		target = &models.Customer{WorkspaceID: imp.wsID}
+		tc = imp.cache.newCustomer(imp.wsID)
 	}
+	imp.cache.unindexCustomer(tc)
+	defer imp.cache.indexCustomer(tc)
+	tc.dirty = true
+	target := tc.row
 	before := snapshotCustomer(target)
-	if !isNew && notNewer(rec.SourceUpdatedAt, target.SourceUpdatedAt) {
-		return imp.customerVisitOnly(target, before, rec.LastVisitAt)
-	}
+	// A chave nova substitui a antiga no mesmo cadastro (id mantido: veículos e atendimentos seguem ligados).
 	target.Source = models.SourceOnMotor
 	target.SourceID = &sourceID
+
+	if !isNew && notNewer(rec.SourceUpdatedAt, target.SourceUpdatedAt) {
+		imp.customerVisitOnly(target, before, rec.LastVisitAt)
+		return
+	}
 
 	if name := rec.Name.trimmed(); name != "" {
 		target.Name = name
@@ -101,34 +178,19 @@ func (imp *importer) customer(pos int, rec ImportCustomer) error {
 	}
 
 	// CPF já usado por outro cliente da oficina: fica com o primeiro; este fica sem CPF.
-	if target.CPF != "" && target.CPF != before.cpf {
-		holder, err := imp.store.FindCustomerByCPF(imp.wsID, target.CPF)
-		if err != nil {
-			return err
-		}
-		if holder != nil && holder.ID != target.ID {
-			imp.warn("CPF duplicado em 2 clientes (%s, %s); mantido no primeiro", describeCustomer(holder), label)
+	if target.CPF != "" {
+		if holder := imp.cache.customerByCPF[target.CPF]; holder != nil && holder != tc {
+			imp.warn("CPF duplicado em 2 clientes (%s, %s); mantido no primeiro", describeCustomer(holder.row), label)
 			target.CPF = ""
 		}
 	}
 
 	switch {
 	case isNew:
-		target.SyncedAt = &imp.now
-		if err := imp.store.CreateCustomer(target); err != nil {
-			return err
-		}
 		imp.run.CustomersCreated++
 	case snapshotCustomer(target) != before:
-		target.SyncedAt = &imp.now
-		if err := imp.store.SaveCustomer(target); err != nil {
-			return err
-		}
 		imp.run.CustomersUpdated++
-	default:
-		return imp.store.TouchCustomerSynced(target.ID, imp.now)
 	}
-	return nil
 }
 
 // notNewer: a "Data de edição" recebida não é posterior à já gravada (cadastro sem edição nova no OnMotor).
@@ -142,21 +204,35 @@ func notNewer(incoming FlexString, stored *time.Time) bool {
 
 // customerVisitOnly: sem edição nova, os dados cadastrais ficam como estão; só a última visita
 // avança (ela muda no OnMotor sem alterar a data de edição do cadastro).
-func (imp *importer) customerVisitOnly(c *models.Customer, before customerSnapshot, lastVisit FlexString) error {
+func (imp *importer) customerVisitOnly(c *models.Customer, before customerSnapshot, lastVisit FlexString) {
 	if lastVisit.Set {
 		if t, err := parseImportTime(lastVisit.Value); err == nil && t != nil && (c.LastVisitAt == nil || t.After(*c.LastVisitAt)) {
 			c.LastVisitAt = t
 		}
 	}
-	if snapshotCustomer(c) == before {
-		return imp.store.TouchCustomerSynced(c.ID, imp.now)
+	if snapshotCustomer(c) != before {
+		imp.run.CustomersUpdated++
 	}
-	c.SyncedAt = &imp.now
-	if err := imp.store.SaveCustomer(c); err != nil {
-		return err
+}
+
+// warnKeyChanges resume as trocas de chave do lote (ids locais não são dado pessoal).
+func (imp *importer) warnKeyChanges() {
+	if len(imp.keyChanges) == 0 {
+		return
 	}
-	imp.run.CustomersUpdated++
-	return nil
+	ids := ""
+	for i, tc := range imp.keyChanges {
+		if i == 20 {
+			ids += ", …"
+			break
+		}
+		if i > 0 {
+			ids += ", "
+		}
+		ids += fmt.Sprintf("#%d", tc.row.ID)
+	}
+	imp.warn("chave de cliente atualizada (%d): %s", len(imp.keyChanges), ids)
+	imp.keyChanges = nil
 }
 
 type vehicleSnapshot struct {
@@ -188,46 +264,48 @@ func snapshotVehicle(v *models.CustomerVehicle) vehicleSnapshot {
 	return s
 }
 
-func (imp *importer) vehicle(pos int, rec ImportVehicle) error {
+// owner devolve o cliente do OnMotor pela chave (já gravado: o flush dos clientes vem antes).
+func (imp *importer) owner(label, key string) *uint {
+	tc := imp.cache.customerBySource[key]
+	if tc == nil {
+		imp.warn("%s: %s não encontrado", label, referenceLabel("cliente", key))
+		return nil
+	}
+	id := tc.row.ID
+	return &id
+}
+
+func (imp *importer) vehicle(pos int, rec ImportVehicle) {
 	sourceID := rec.SourceID.trimmed()
 	if sourceID == "" {
 		imp.skip("veículo na posição %d sem source_id (ignorado)", pos)
-		return nil
+		return
 	}
-	label := "veículo OnMotor " + sourceID
+	label := recordLabel("veículo", pos, sourceID)
 	plate := normalizeCustomerPlate(rec.Plate.Value)
 
-	target, err := imp.store.FindVehicleBySource(imp.wsID, models.SourceOnMotor, sourceID)
-	if err != nil {
-		return err
-	}
-	if target == nil && plate != "" {
+	tv := imp.cache.vehicleBySource[sourceID]
+	if tv == nil && plate != "" {
 		// Veículo local (sem source_id) com a mesma placa: vira o registro do OnMotor.
-		local, err := imp.store.FindVehicleByPlate(imp.wsID, plate)
-		if err != nil {
-			return err
-		}
-		if local != nil && local.SourceID == nil {
-			target = local
+		if local := imp.cache.vehicleByPlate[plate]; local != nil && local.row.SourceID == nil {
+			tv = local
 		}
 	}
-	isNew := target == nil
+	isNew := tv == nil
 	if isNew {
-		target = &models.CustomerVehicle{WorkspaceID: imp.wsID}
+		tv = imp.cache.newVehicle(imp.wsID)
 	}
+	imp.cache.unindexVehicle(tv)
+	defer imp.cache.indexVehicle(tv)
+	tv.dirty = true
+	target := tv.row
 	before := snapshotVehicle(target)
 	target.Source = models.SourceOnMotor
 	target.SourceID = &sourceID
 
-	if ownerID := rec.CustomerSourceID.trimmed(); ownerID != "" {
-		owner, err := imp.store.FindCustomerBySource(imp.wsID, models.SourceOnMotor, ownerID)
-		if err != nil {
-			return err
-		}
-		if owner != nil {
-			target.CustomerID = &owner.ID
-		} else {
-			imp.warn("%s: cliente OnMotor %s não encontrado", label, ownerID)
+	if key := rec.CustomerSourceID.trimmed(); key != "" {
+		if id := imp.owner(label, key); id != nil {
+			target.CustomerID = id
 		}
 	}
 	for _, f := range []struct {
@@ -254,36 +332,22 @@ func (imp *importer) vehicle(pos int, rec ImportVehicle) error {
 		target.Plate = plate
 	}
 	// Placa de outro veículo: a última gravação vence; o anterior fica sem placa.
-	if target.Plate != "" && target.Plate != before.plate {
-		holder, err := imp.store.FindVehicleByPlate(imp.wsID, target.Plate)
-		if err != nil {
-			return err
-		}
-		if holder != nil && holder.ID != target.ID {
-			if err := imp.store.ClearVehiclePlate(holder.ID); err != nil {
-				return err
-			}
-			imp.warn("placa duplicada: %s assumiu a placa do veículo %s", label, describeVehicle(holder))
+	if target.Plate != "" {
+		if holder := imp.cache.vehicleByPlate[target.Plate]; holder != nil && holder != tv {
+			imp.cache.unindexVehicle(holder)
+			holder.row.Plate = ""
+			holder.dirty = true
+			imp.cache.indexVehicle(holder)
+			imp.warn("placa duplicada: %s assumiu a placa do veículo %s", label, describeVehicle(holder.row))
 		}
 	}
 
 	switch {
 	case isNew:
-		target.SyncedAt = &imp.now
-		if err := imp.store.CreateVehicle(target); err != nil {
-			return err
-		}
 		imp.run.VehiclesCreated++
 	case snapshotVehicle(target) != before:
-		target.SyncedAt = &imp.now
-		if err := imp.store.SaveVehicle(target); err != nil {
-			return err
-		}
 		imp.run.VehiclesUpdated++
-	default:
-		return imp.store.TouchVehicleSynced(target.ID, imp.now)
 	}
-	return nil
 }
 
 type serviceSnapshot struct {
@@ -323,53 +387,44 @@ func snapshotService(sr *models.ServiceRecord) serviceSnapshot {
 	return s
 }
 
-func (imp *importer) service(pos int, rec ImportService) error {
+func (imp *importer) service(pos int, rec ImportService) {
 	sourceID := rec.SourceID.trimmed()
 	if sourceID == "" {
 		imp.skip("OS na posição %d sem source_id (ignorada)", pos)
-		return nil
+		return
 	}
-	label := "OS OnMotor " + sourceID
+	label := recordLabel("OS", pos, sourceID)
 
-	target, err := imp.store.FindServiceRecordBySource(imp.wsID, models.SourceOnMotor, sourceID)
-	if err != nil {
-		return err
-	}
-	isNew := target == nil
+	ts := imp.cache.serviceBySource[sourceID]
+	isNew := ts == nil
 	if isNew {
-		target = &models.ServiceRecord{WorkspaceID: imp.wsID, Source: models.SourceOnMotor, SourceID: sourceID, Items: "[]"}
+		ts = imp.cache.newService(imp.wsID, sourceID)
 	}
+	ts.dirty = true
+	target := ts.row
 	before := snapshotService(target)
 
-	if ownerID := rec.CustomerSourceID.trimmed(); ownerID != "" {
-		owner, err := imp.store.FindCustomerBySource(imp.wsID, models.SourceOnMotor, ownerID)
-		if err != nil {
-			return err
-		}
-		if owner != nil {
-			target.CustomerID = &owner.ID
-		} else {
-			imp.warn("%s: cliente OnMotor %s não encontrado", label, ownerID)
+	if key := rec.CustomerSourceID.trimmed(); key != "" {
+		if id := imp.owner(label, key); id != nil {
+			target.CustomerID = id
 		}
 	}
 
 	plate := normalizeCustomerPlate(rec.Plate.Value)
-	vehicle, err := imp.serviceVehicle(label, rec.VehicleSourceID.trimmed(), plate)
-	if err != nil {
-		return err
-	}
+	vehicle := imp.serviceVehicle(label, rec.VehicleSourceID.trimmed(), plate)
 	if vehicle != nil {
-		target.CustomerVehicleID = &vehicle.ID
-		if target.CustomerID == nil && vehicle.CustomerID != nil {
-			id := *vehicle.CustomerID
-			target.CustomerID = &id
+		id := vehicle.row.ID
+		target.CustomerVehicleID = &id
+		if target.CustomerID == nil && vehicle.row.CustomerID != nil {
+			owner := *vehicle.row.CustomerID
+			target.CustomerID = &owner
 		}
 	}
 	switch {
 	case rec.Plate.Set:
 		target.Plate = plate
 	case target.Plate == "" && vehicle != nil:
-		target.Plate = vehicle.Plate
+		target.Plate = vehicle.row.Plate
 	}
 
 	imp.intField(label, "quilometragem", rec.Mileage, validMileage, &target.Mileage)
@@ -405,40 +460,29 @@ func (imp *importer) service(pos int, rec ImportService) error {
 
 	switch {
 	case isNew:
-		target.SyncedAt = &imp.now
-		if err := imp.store.CreateServiceRecord(target); err != nil {
-			return err
-		}
 		imp.run.ServicesCreated++
 	case snapshotService(target) != before:
-		target.SyncedAt = &imp.now
-		if err := imp.store.SaveServiceRecord(target); err != nil {
-			return err
-		}
 		imp.run.ServicesUpdated++
-	default:
-		if err := imp.store.TouchServiceRecordSynced(target.ID, imp.now); err != nil {
-			return err
-		}
 	}
 
-	if target.CustomerVehicleID != nil && target.Mileage != nil {
-		return imp.store.RaiseVehicleMileage(*target.CustomerVehicleID, *target.Mileage)
+	// last_mileage do veículo só sobe.
+	if vehicle != nil && target.Mileage != nil && (vehicle.row.LastMileage == nil || *target.Mileage > *vehicle.row.LastMileage) {
+		km := *target.Mileage
+		vehicle.row.LastMileage = &km
+		vehicle.dirty = true
 	}
-	return nil
 }
 
 // serviceVehicle acha o veículo da OS pelo vehicle_source_id; sem ele (ou não encontrado), pela placa.
-func (imp *importer) serviceVehicle(label, vehicleSourceID, plate string) (*models.CustomerVehicle, error) {
+func (imp *importer) serviceVehicle(label, vehicleSourceID, plate string) *trackedVehicle {
 	if vehicleSourceID != "" {
-		v, err := imp.store.FindVehicleBySource(imp.wsID, models.SourceOnMotor, vehicleSourceID)
-		if err != nil || v != nil {
-			return v, err
+		if tv := imp.cache.vehicleBySource[vehicleSourceID]; tv != nil {
+			return tv
 		}
-		imp.warn("%s: veículo OnMotor %s não encontrado", label, vehicleSourceID)
+		imp.warn("%s: %s não encontrado", label, referenceLabel("veículo", vehicleSourceID))
 	}
 	if plate == "" {
-		return nil, nil
+		return nil
 	}
-	return imp.store.FindVehicleByPlate(imp.wsID, plate)
+	return imp.cache.vehicleByPlate[plate]
 }

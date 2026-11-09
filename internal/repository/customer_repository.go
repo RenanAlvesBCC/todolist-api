@@ -35,11 +35,6 @@ func (r *CustomerRepository) SaveCustomer(c *models.Customer) error {
 	return r.db.Save(c).Error
 }
 
-// TouchCustomerSynced marca a sincronização sem mexer em updated_at (nada mudou no cadastro).
-func (r *CustomerRepository) TouchCustomerSynced(id uint, at time.Time) error {
-	return r.db.Model(&models.Customer{}).Where("id = ?", id).UpdateColumn("synced_at", at).Error
-}
-
 func (r *CustomerRepository) FindCustomer(workspaceID, id uint) (*models.Customer, error) {
 	var c models.Customer
 	if err := r.db.Where("workspace_id = ?", workspaceID).First(&c, id).Error; err != nil {

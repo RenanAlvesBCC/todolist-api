@@ -20,10 +20,8 @@ var (
 type CustomerStore interface {
 	CreateCustomer(c *models.Customer) error
 	SaveCustomer(c *models.Customer) error
-	TouchCustomerSynced(id uint, at time.Time) error
 	FindCustomer(workspaceID, id uint) (*models.Customer, error)
 	FindCustomerByCPF(workspaceID uint, cpf string) (*models.Customer, error)
-	FindCustomerBySource(workspaceID uint, source, sourceID string) (*models.Customer, error)
 	SearchCustomers(workspaceID uint, filter repository.CustomerFilter) ([]models.Customer, int64, error)
 	LastServiceAt(workspaceID uint, customerIDs []uint) (map[uint]time.Time, error)
 	VehiclesByCustomers(workspaceID uint, customerIDs []uint) ([]models.CustomerVehicle, error)

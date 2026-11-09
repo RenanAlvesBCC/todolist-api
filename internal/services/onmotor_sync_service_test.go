@@ -64,10 +64,9 @@ func (f *syncFixture) vehicleBySource(t *testing.T, sourceID string) *models.Cus
 
 func (f *syncFixture) serviceBySource(t *testing.T, sourceID string) *models.ServiceRecord {
 	t.Helper()
-	sr, err := f.repo.FindServiceRecordBySource(fxWorkspaceID, models.SourceOnMotor, sourceID)
-	require.NoError(t, err)
-	require.NotNil(t, sr, "OS OnMotor "+sourceID)
-	return sr
+	var sr models.ServiceRecord
+	require.NoError(t, f.db.Where("workspace_id = ? AND source_id = ?", fxWorkspaceID, sourceID).First(&sr).Error, "OS OnMotor "+sourceID)
+	return &sr
 }
 
 func decodeImport(t *testing.T, body string) ImportInput {
@@ -295,7 +294,7 @@ func TestImport_InvalidFieldsAreBlankedWithWarnings(t *testing.T) {
 
 	assert.Len(t, res.Warnings, 19)
 	assert.Contains(t, res.Warnings, "cliente OnMotor 77: CPF inválido (campo ignorado)")
-	assert.Contains(t, res.Warnings, "OS OnMotor os77: items inválido (esperado um array; campo ignorado)")
+	assert.Contains(t, res.Warnings, "OS na posição 1 do lote: items inválido (esperado um array; campo ignorado)")
 	assertNoPersonalData(t, res.Warnings, "João", "Silva", "111.111.111-11", "11111111111", "joao", "JOA0S11", "Santos", "999")
 }
 
@@ -385,8 +384,8 @@ func TestImport_ServiceLinksAndMileage(t *testing.T) {
 		{"source_id":"s2","vehicle_source_id":"nao-existe","plate":"AAA-1A11","customer_source_id":"nao-existe","mileage":"90.500"},
 		{"source_id":"s3","plate":"ZZZ9Z99"}],"final":true}`))
 	assert.Equal(t, 3, res.Counters.ServicesCreated)
-	assert.Contains(t, res.Warnings, "OS OnMotor s2: veículo OnMotor nao-existe não encontrado")
-	assert.Contains(t, res.Warnings, "OS OnMotor s2: cliente OnMotor nao-existe não encontrado")
+	assert.Contains(t, res.Warnings, "OS na posição 2 do lote: veículo referenciado não encontrado")
+	assert.Contains(t, res.Warnings, "OS na posição 2 do lote: cliente referenciado não encontrado")
 
 	v1 := f.vehicleBySource(t, "v1")
 	assert.Equal(t, 90500, *v1.LastMileage, "maior km entre cadastro e OS")
@@ -490,7 +489,7 @@ func TestSyncRunJSONHasNoPersonalData(t *testing.T) {
 	}
 }
 
-// failingStore delega ao banco real e falha no método escolhido.
+// failingStore delega ao banco real e falha no método escolhido (sem transação: não é o repositório).
 type failingStore struct {
 	OnMotorStore
 	fail string
@@ -503,83 +502,63 @@ func (s *failingStore) err(method string) error {
 	return nil
 }
 
-func (s *failingStore) CreateCustomer(c *models.Customer) error {
-	if err := s.err("CreateCustomer"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.CreateCustomer(c)
-}
-func (s *failingStore) SaveCustomer(c *models.Customer) error {
-	if err := s.err("SaveCustomer"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.SaveCustomer(c)
-}
-func (s *failingStore) FindCustomerByCPF(ws uint, cpf string) (*models.Customer, error) {
-	if err := s.err("FindCustomerByCPF"); err != nil {
+func (s *failingStore) CustomersForImport(ws uint, l repository.CustomerImportLookup) ([]models.Customer, error) {
+	if err := s.err("CustomersForImport"); err != nil {
 		return nil, err
 	}
-	return s.OnMotorStore.FindCustomerByCPF(ws, cpf)
+	return s.OnMotorStore.CustomersForImport(ws, l)
 }
-func (s *failingStore) FindCustomerBySource(ws uint, source, id string) (*models.Customer, error) {
-	if err := s.err("FindCustomerBySource"); err != nil {
+func (s *failingStore) VehiclesForImport(ws uint, ids, plates []string) ([]models.CustomerVehicle, error) {
+	if err := s.err("VehiclesForImport"); err != nil {
 		return nil, err
 	}
-	return s.OnMotorStore.FindCustomerBySource(ws, source, id)
+	return s.OnMotorStore.VehiclesForImport(ws, ids, plates)
 }
-func (s *failingStore) CreateVehicle(v *models.CustomerVehicle) error {
-	if err := s.err("CreateVehicle"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.CreateVehicle(v)
-}
-func (s *failingStore) SaveVehicle(v *models.CustomerVehicle) error {
-	if err := s.err("SaveVehicle"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.SaveVehicle(v)
-}
-func (s *failingStore) FindVehicleByPlate(ws uint, plate string) (*models.CustomerVehicle, error) {
-	if err := s.err("FindVehicleByPlate"); err != nil {
+func (s *failingStore) ServiceRecordsForImport(ws uint, ids []string) ([]models.ServiceRecord, error) {
+	if err := s.err("ServiceRecordsForImport"); err != nil {
 		return nil, err
 	}
-	return s.OnMotorStore.FindVehicleByPlate(ws, plate)
+	return s.OnMotorStore.ServiceRecordsForImport(ws, ids)
 }
-func (s *failingStore) FindVehicleBySource(ws uint, source, id string) (*models.CustomerVehicle, error) {
-	if err := s.err("FindVehicleBySource"); err != nil {
-		return nil, err
-	}
-	return s.OnMotorStore.FindVehicleBySource(ws, source, id)
+func (s *failingStore) CreateCustomers(rows []*models.Customer) error {
+	return firstErr(s.err("CreateCustomers"), func() error { return s.OnMotorStore.CreateCustomers(rows) })
 }
-func (s *failingStore) ClearVehiclePlate(id uint) error {
-	if err := s.err("ClearVehiclePlate"); err != nil {
+func (s *failingStore) UpsertCustomers(rows []*models.Customer) error {
+	return firstErr(s.err("UpsertCustomers"), func() error { return s.OnMotorStore.UpsertCustomers(rows) })
+}
+func (s *failingStore) ReleaseCustomerKeys(ids []uint) error {
+	return firstErr(s.err("ReleaseCustomerKeys"), func() error { return s.OnMotorStore.ReleaseCustomerKeys(ids) })
+}
+func (s *failingStore) TouchCustomers(ids []uint, at time.Time) error {
+	return firstErr(s.err("TouchCustomers"), func() error { return s.OnMotorStore.TouchCustomers(ids, at) })
+}
+func (s *failingStore) CreateVehicles(rows []*models.CustomerVehicle) error {
+	return firstErr(s.err("CreateVehicles"), func() error { return s.OnMotorStore.CreateVehicles(rows) })
+}
+func (s *failingStore) UpsertVehicles(rows []*models.CustomerVehicle) error {
+	return firstErr(s.err("UpsertVehicles"), func() error { return s.OnMotorStore.UpsertVehicles(rows) })
+}
+func (s *failingStore) ReleaseVehicleKeys(ids []uint) error {
+	return firstErr(s.err("ReleaseVehicleKeys"), func() error { return s.OnMotorStore.ReleaseVehicleKeys(ids) })
+}
+func (s *failingStore) TouchVehicles(ids []uint, at time.Time) error {
+	return firstErr(s.err("TouchVehicles"), func() error { return s.OnMotorStore.TouchVehicles(ids, at) })
+}
+func (s *failingStore) CreateServiceRecords(rows []*models.ServiceRecord) error {
+	return firstErr(s.err("CreateServiceRecords"), func() error { return s.OnMotorStore.CreateServiceRecords(rows) })
+}
+func (s *failingStore) UpsertServiceRecords(rows []*models.ServiceRecord) error {
+	return firstErr(s.err("UpsertServiceRecords"), func() error { return s.OnMotorStore.UpsertServiceRecords(rows) })
+}
+func (s *failingStore) TouchServiceRecords(ids []uint, at time.Time) error {
+	return firstErr(s.err("TouchServiceRecords"), func() error { return s.OnMotorStore.TouchServiceRecords(ids, at) })
+}
+
+func firstErr(err error, next func() error) error {
+	if err != nil {
 		return err
 	}
-	return s.OnMotorStore.ClearVehiclePlate(id)
-}
-func (s *failingStore) CreateServiceRecord(sr *models.ServiceRecord) error {
-	if err := s.err("CreateServiceRecord"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.CreateServiceRecord(sr)
-}
-func (s *failingStore) SaveServiceRecord(sr *models.ServiceRecord) error {
-	if err := s.err("SaveServiceRecord"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.SaveServiceRecord(sr)
-}
-func (s *failingStore) TouchServiceRecordSynced(id uint, at time.Time) error {
-	if err := s.err("TouchServiceRecordSynced"); err != nil {
-		return err
-	}
-	return s.OnMotorStore.TouchServiceRecordSynced(id, at)
-}
-func (s *failingStore) FindServiceRecordBySource(ws uint, source, id string) (*models.ServiceRecord, error) {
-	if err := s.err("FindServiceRecordBySource"); err != nil {
-		return nil, err
-	}
-	return s.OnMotorStore.FindServiceRecordBySource(ws, source, id)
+	return next()
 }
 
 type failingRuns struct {
@@ -601,44 +580,38 @@ func (r *failingRuns) SaveRun(run *models.SyncRun) error {
 }
 
 func TestImport_StoreErrorsAbortTheBatch(t *testing.T) {
-	// Base já importada, para exercitar também os caminhos de atualização.
+	// Base já importada, para exercitar também os caminhos de atualização e de "sem mudança".
 	seed := `{"customers":[{"source_id":"123","name":"Maria","cpf":"12345678909"}],
 		"vehicles":[{"source_id":"889","plate":"ABC1D23"},{"source_id":"890","plate":"XYZ9W87"}],
 		"services":[{"source_id":"5001","vehicle_source_id":"889"}],"final":true}`
 	batches := map[string]string{
-		"FindCustomerBySource":      `{"customers":[{"source_id":"1","name":"A"}]}`,
-		"FindCustomerByCPF":         `{"customers":[{"source_id":"1","name":"A","cpf":"52998224725"}]}`,
-		"CreateCustomer":            `{"customers":[{"source_id":"1","name":"A"}]}`,
-		"SaveCustomer":              `{"customers":[{"source_id":"123","name":"Maria Souza"}]}`,
-		"FindVehicleBySource":       `{"vehicles":[{"source_id":"1"}]}`,
-		"FindVehicleByPlate":        `{"vehicles":[{"source_id":"1","plate":"NEW1A11"}]}`,
-		"CreateVehicle":             `{"vehicles":[{"source_id":"1"}]}`,
-		"SaveVehicle":               `{"vehicles":[{"source_id":"889","color":"Azul"}]}`,
-		"ClearVehiclePlate":         `{"vehicles":[{"source_id":"890","plate":"ABC1D23"}]}`,
-		"FindServiceRecordBySource": `{"services":[{"source_id":"1"}]}`,
-		"CreateServiceRecord":       `{"services":[{"source_id":"1"}]}`,
-		"SaveServiceRecord":         `{"services":[{"source_id":"5001","status":"x"}]}`,
-		"TouchServiceRecordSynced":  `{"services":[{"source_id":"5001"}]}`,
+		"CustomersForImport":      `{"customers":[{"source_id":"1","name":"A"}]}`,
+		"VehiclesForImport":       `{"vehicles":[{"source_id":"1"}]}`,
+		"ServiceRecordsForImport": `{"services":[{"source_id":"1"}]}`,
+		"CreateCustomers":         `{"customers":[{"source_id":"1","name":"A"}]}`,
+		"UpsertCustomers":         `{"customers":[{"source_id":"123","name":"Maria Souza"}]}`,
+		"ReleaseCustomerKeys":     `{"customers":[{"source_id":"123","cpf":"52998224725"}]}`,
+		"TouchCustomers":          `{"customers":[{"source_id":"123","name":"Maria"}]}`,
+		"CreateVehicles":          `{"vehicles":[{"source_id":"1"}]}`,
+		"UpsertVehicles":          `{"vehicles":[{"source_id":"889","color":"Azul"}]}`,
+		"ReleaseVehicleKeys":      `{"vehicles":[{"source_id":"890","plate":"ABC1D23"}]}`,
+		"TouchVehicles":           `{"vehicles":[{"source_id":"889"}]}`,
+		"CreateServiceRecords":    `{"services":[{"source_id":"1"}]}`,
+		"UpsertServiceRecords":    `{"services":[{"source_id":"5001","status":"x"}]}`,
+		"TouchServiceRecords":     `{"services":[{"source_id":"5001"}]}`,
 	}
 	for method, body := range batches {
 		f := newSyncFixture(t)
-		f.importBatch(t, decodeImport(t, seed))
+		seeded := f.importBatch(t, decodeImport(t, seed))
+		open := f.importBatch(t, ImportInput{})
 		f.svc.store = &failingStore{OnMotorStore: f.repo, fail: method}
-		_, err := f.svc.ImportWithToken(f.token, decodeImport(t, body))
+		_, err := f.svc.ImportWithToken(f.token, ImportInput{RunID: &open.RunID, Customers: decodeImport(t, body).Customers,
+			Vehicles: decodeImport(t, body).Vehicles, Services: decodeImport(t, body).Services})
 		assert.ErrorIs(t, err, assert.AnError, method)
-	}
-
-	// Falhas na busca do dono / do veículo da OS também abortam.
-	for _, tc := range []struct{ method, body string }{
-		{"FindCustomerBySource", `{"vehicles":[{"source_id":"1","customer_source_id":"123"}]}`},
-		{"FindCustomerBySource", `{"services":[{"source_id":"1","customer_source_id":"123"}]}`},
-		{"FindVehicleBySource", `{"services":[{"source_id":"1","vehicle_source_id":"889"}]}`},
-	} {
-		f := newSyncFixture(t)
-		f.importBatch(t, decodeImport(t, seed))
-		f.svc.store = &failOnLookup{failingStore{OnMotorStore: f.repo, fail: tc.method}}
-		_, err := f.svc.ImportWithToken(f.token, decodeImport(t, tc.body))
-		assert.ErrorIs(t, err, assert.AnError, tc.method+" "+tc.body)
+		run, _ := f.runs.FindRun(fxWorkspaceID, open.RunID)
+		assert.Equal(t, models.SyncStatusRunning, run.Status, method)
+		assert.Zero(t, run.CustomersUpdated+run.CustomersCreated+run.VehiclesCreated+run.VehiclesUpdated, "contadores do lote desfeito não ficam")
+		assert.NotZero(t, seeded.RunID)
 	}
 
 	f := newSyncFixture(t)
@@ -656,23 +629,16 @@ func TestImport_StoreErrorsAbortTheBatch(t *testing.T) {
 	assert.ErrorIs(t, err, assert.AnError)
 }
 
-// failOnLookup falha só na busca do dono (cliente 123) ou do veículo (889) referenciados pelo registro.
-type failOnLookup struct {
-	failingStore
-}
-
-func (s *failOnLookup) FindCustomerBySource(ws uint, source, id string) (*models.Customer, error) {
-	if s.fail == "FindCustomerBySource" && id == "123" {
-		return nil, assert.AnError
-	}
-	return s.OnMotorStore.FindCustomerBySource(ws, source, id)
-}
-
-func (s *failOnLookup) FindVehicleBySource(ws uint, source, id string) (*models.CustomerVehicle, error) {
-	if s.fail == "FindVehicleBySource" && id == "889" {
-		return nil, assert.AnError
-	}
-	return s.OnMotorStore.FindVehicleBySource(ws, source, id)
+func TestImport_TransactionRollsBackWholeBatch(t *testing.T) {
+	f := newSyncFixture(t)
+	// Gatilho no banco que derruba a gravação dos veículos depois de os clientes já terem entrado.
+	require.NoError(t, f.db.Exec(`CREATE TRIGGER fail_vehicles BEFORE INSERT ON customer_vehicles
+		BEGIN SELECT RAISE(ABORT, 'falha simulada'); END`).Error)
+	_, err := f.svc.ImportWithToken(f.token, decodeImport(t, fullImportBody))
+	require.Error(t, err)
+	var n int64
+	f.db.Model(&models.Customer{}).Count(&n)
+	assert.Zero(t, n, "clientes do lote também são desfeitos")
 }
 
 func TestDuplicateError_Message(t *testing.T) {
@@ -741,8 +707,8 @@ func TestImport_LastVisitAndSourceUpdatedAtValidation(t *testing.T) {
 	f := newSyncFixture(t)
 	res := f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:1","name":"X","last_visit_at":"ontem","source_updated_at":"??"}],"final":true}`))
 	assert.Equal(t, models.SyncStatusPartial, res.Status)
-	assert.Contains(t, res.Warnings, "cliente OnMotor cpf:1: last_visit_at inválido (campo ignorado)")
-	assert.Contains(t, res.Warnings, "cliente OnMotor cpf:1: source_updated_at inválido (campo ignorado)")
+	assert.Contains(t, res.Warnings, "cliente na posição 1 do lote: last_visit_at inválido (campo ignorado)")
+	assert.Contains(t, res.Warnings, "cliente na posição 1 do lote: source_updated_at inválido (campo ignorado)")
 	c := f.customerBySource(t, "cpf:1")
 	assert.Nil(t, c.LastVisitAt)
 	assert.Nil(t, c.SourceUpdatedAt)
@@ -793,8 +759,138 @@ func TestImport_SkipsProfileWhenSourceNotEdited(t *testing.T) {
 	assert.Equal(t, 1, res.Counters.CustomersUpdated)
 	assert.Equal(t, "Santos", f.customerBySource(t, "cpf:12345678909").City)
 
-	f.svc.store = &failingStore{OnMotorStore: f.repo, fail: "SaveCustomer"}
+	f.svc.store = &failingStore{OnMotorStore: f.repo, fail: "UpsertCustomers"}
 	_, err := f.svc.ImportWithToken(f.token, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909",
 		"last_visit_at":"2026-12-01T10:00:00-03:00","source_updated_at":"2020-01-01"}]}`))
 	assert.ErrorIs(t, err, assert.AnError)
+}
+
+func TestNormalizeName(t *testing.T) {
+	assert.Equal(t, "maria d souza", normalizeName("  MÁRIA   d'Souza "))
+	assert.Equal(t, "joao da silva", normalizeName("João da Silva"))
+	assert.Equal(t, "", normalizeName(" - "))
+}
+
+func TestImport_KeyTransitionNameMobileToCPF(t *testing.T) {
+	f := newSyncFixture(t)
+	f.importBatch(t, decodeImport(t, `{
+		"customers":[{"source_id":"nome:maria souza|cel:11987654321","name":"Maria Souza","mobile":"(11) 98765-4321"}],
+		"vehicles":[{"source_id":"placa:ABC1D23","customer_source_id":"nome:maria souza|cel:11987654321","plate":"ABC1D23","model":"Gol"}],
+		"final":true}`))
+	before := f.customerBySource(t, "nome:maria souza|cel:11987654321")
+	ws := fxWorkspaceID
+	list := &models.TaskList{Title: "Gol", UserID: fxOwner, WorkspaceID: &ws, CustomerID: &before.ID}
+	require.NoError(t, f.db.Create(list).Error)
+
+	// A planilha nova já traz o CPF: a chave passa a ser cpf:..., o nome vem com outra grafia.
+	next := `{
+		"customers":[{"source_id":"cpf:12345678909","name":"MÁRIA  SOUZA","cpf":"123.456.789-09","mobile":"11987654321"}],
+		"vehicles":[{"source_id":"placa:ABC1D23","customer_source_id":"cpf:12345678909","plate":"ABC1D23","model":"Gol"}],
+		"final":true}`
+	res := f.importBatch(t, decodeImport(t, next))
+	assert.Equal(t, SyncCounters{CustomersUpdated: 1}, res.Counters, "atualiza o mesmo cadastro, sem duplicar")
+	assert.Equal(t, []string{fmt.Sprintf("chave de cliente atualizada (1): #%d", before.ID)}, []string(res.Warnings))
+	assertNoPersonalData(t, res.Warnings, "maria", "Maria", "12345678909", "11987654321", "ABC1D23")
+
+	merged := f.customerBySource(t, "cpf:12345678909")
+	assert.Equal(t, before.ID, merged.ID, "id mantido")
+	assert.Equal(t, "12345678909", merged.CPF)
+	assert.Equal(t, "MÁRIA  SOUZA", merged.Name)
+	old, err := f.repo.FindCustomerBySource(fxWorkspaceID, models.SourceOnMotor, "nome:maria souza|cel:11987654321")
+	require.NoError(t, err)
+	assert.Nil(t, old, "a chave antiga foi substituída")
+	assert.Equal(t, before.ID, *f.vehicleBySource(t, "placa:ABC1D23").CustomerID, "veículo continua no mesmo cliente")
+	var reloaded models.TaskList
+	require.NoError(t, f.db.First(&reloaded, list.ID).Error)
+	assert.Equal(t, before.ID, *reloaded.CustomerID, "atendimento continua ligado")
+
+	var n int64
+	f.db.Model(&models.Customer{}).Count(&n)
+	assert.Equal(t, int64(1), n)
+
+	res = f.importBatch(t, decodeImport(t, next))
+	assert.Equal(t, SyncCounters{}, res.Counters, "idempotente depois da troca")
+	assert.Empty(t, res.Warnings)
+}
+
+func TestImport_KeyTransitionByDocument(t *testing.T) {
+	f := newSyncFixture(t)
+	numeric := &models.Customer{WorkspaceID: fxWorkspaceID, Name: "Maria", Source: models.SourceOnMotor, SourceID: ptr("4521"), CPF: "12345678909"}
+	company := &models.Customer{WorkspaceID: fxWorkspaceID, Name: "Parceira", Source: models.SourceOnMotor, SourceID: ptr("nome:parceira|cel:1133334444"), CNPJ: "11222333000181"}
+	require.NoError(t, f.db.Create(numeric).Error)
+	require.NoError(t, f.db.Create(company).Error)
+	car := &models.CustomerVehicle{WorkspaceID: fxWorkspaceID, CustomerID: &numeric.ID, Source: models.SourceOnMotor, SourceID: ptr("placa:ABC1D23"), Plate: "ABC1D23"}
+	require.NoError(t, f.db.Create(car).Error)
+
+	body := `{"customers":[
+		{"source_id":"cpf:12345678909","name":"Maria Souza","cpf":"12345678909"},
+		{"source_id":"cnpj:11222333000181","name":"Parceira Ltda","cnpj":"11.222.333/0001-81"}],
+		"vehicles":[{"source_id":"placa:ABC1D23","customer_source_id":"cpf:12345678909","plate":"ABC1D23"}],
+		"final":true}`
+	res := f.importBatch(t, decodeImport(t, body))
+	assert.Equal(t, SyncCounters{CustomersUpdated: 2}, res.Counters)
+	assert.Equal(t, []string{fmt.Sprintf("chave de cliente atualizada (2): #%d, #%d", numeric.ID, company.ID)}, []string(res.Warnings))
+	assert.Equal(t, numeric.ID, f.customerBySource(t, "cpf:12345678909").ID)
+	assert.Equal(t, company.ID, f.customerBySource(t, "cnpj:11222333000181").ID)
+	assert.Equal(t, numeric.ID, *f.vehicleBySource(t, "placa:ABC1D23").CustomerID)
+
+	res = f.importBatch(t, decodeImport(t, body))
+	assert.Equal(t, SyncCounters{}, res.Counters)
+	assert.Empty(t, res.Warnings)
+}
+
+func TestImport_KeyTransitionDoesNotStealLiveRecords(t *testing.T) {
+	f := newSyncFixture(t)
+	f.importBatch(t, decodeImport(t, `{"customers":[
+		{"source_id":"nome:ana|cel:11911112222","name":"Ana","mobile":"11911112222"},
+		{"source_id":"nome:bia|cel:11933334444","name":"Bia","mobile":"11933334444"}],"final":true}`))
+	bia := f.customerBySource(t, "nome:bia|cel:11933334444")
+	require.NoError(t, f.db.Model(bia).Update("cpf", "52998224725").Error)
+
+	// Ana continua no lote com a chave antiga: o registro com CPF é outra pessoa, não é adotado.
+	// Bia ganhou CPF aqui: deixa de ser candidata por nome + celular.
+	res := f.importBatch(t, decodeImport(t, `{"customers":[
+		{"source_id":"nome:ana|cel:11911112222","name":"Ana","mobile":"11911112222"},
+		{"source_id":"cpf:12345678909","name":"Ana","cpf":"12345678909","mobile":"11911112222"},
+		{"source_id":"nome:bia|cel:11933334444-2","name":"Bia","mobile":"11933334444"}],"final":true}`))
+	assert.Equal(t, 2, res.Counters.CustomersCreated)
+	assert.Empty(t, res.Warnings)
+	var n int64
+	f.db.Model(&models.Customer{}).Count(&n)
+	assert.Equal(t, int64(4), n)
+	assert.NotEqual(t, f.customerBySource(t, "nome:ana|cel:11911112222").ID, f.customerBySource(t, "cpf:12345678909").ID)
+}
+
+func TestImportLabelsNeverExposeDerivedKeys(t *testing.T) {
+	assert.Equal(t, "cliente OnMotor 4521", recordLabel("cliente", 3, "4521"))
+	assert.Equal(t, "cliente na posição 3 do lote", recordLabel("cliente", 3, "cpf:12345678909"))
+	assert.Equal(t, "veículo OnMotor 9", referenceLabel("veículo", "9"))
+	assert.Equal(t, "veículo referenciado", referenceLabel("veículo", "placa:ABC1D23"))
+	assert.False(t, isOnMotorID(""))
+
+	for want, c := range map[string]models.Customer{
+		"OnMotor 7":             {ID: 1, SourceID: ptr("7")},
+		"outro cliente do lote": {SourceID: ptr("cpf:1")},
+		"local #4":              {ID: 4, Source: models.SourceLocal},
+		"#5":                    {ID: 5, Source: models.SourceOnMotor, SourceID: ptr("nome:x|cel:1")},
+	} {
+		assert.Equal(t, want, describeCustomer(&c))
+	}
+	for want, v := range map[string]models.CustomerVehicle{
+		"OnMotor 7":             {ID: 1, SourceID: ptr("7")},
+		"outro veículo do lote": {SourceID: ptr("placa:X")},
+		"local #4":              {ID: 4, Source: models.SourceLocal},
+		"#5":                    {ID: 5, Source: models.SourceOnMotor, SourceID: ptr("placa:Y")},
+	} {
+		assert.Equal(t, want, describeVehicle(&v))
+	}
+
+	imp := &importer{run: &models.SyncRun{}}
+	for i := 1; i <= 22; i++ {
+		imp.keyChanges = append(imp.keyChanges, &trackedCustomer{row: &models.Customer{ID: uint(i)}})
+	}
+	imp.warnKeyChanges()
+	require.Len(t, imp.run.Warnings, 1)
+	assert.True(t, strings.HasPrefix(imp.run.Warnings[0], "chave de cliente atualizada (22): #1, #2"))
+	assert.True(t, strings.HasSuffix(imp.run.Warnings[0], "#20, …"))
 }

@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/RenanAlvesBCC/oficina-api/internal/models"
+	"github.com/RenanAlvesBCC/oficina-api/internal/repository"
 )
 
 const (
@@ -26,24 +27,27 @@ var (
 	ErrInvalidTrigger       = errors.New("trigger inválido")
 )
 
-// OnMotorStore é o que a importação precisa do cadastro. Os Find*By* devolvem nil, nil quando não encontram.
+// OnMotorStore é o que a importação precisa do cadastro: pré-carga e gravação em lote.
 type OnMotorStore interface {
-	CreateCustomer(c *models.Customer) error
-	SaveCustomer(c *models.Customer) error
-	TouchCustomerSynced(id uint, at time.Time) error
-	FindCustomerByCPF(workspaceID uint, cpf string) (*models.Customer, error)
-	FindCustomerBySource(workspaceID uint, source, sourceID string) (*models.Customer, error)
-	CreateVehicle(v *models.CustomerVehicle) error
-	SaveVehicle(v *models.CustomerVehicle) error
-	TouchVehicleSynced(id uint, at time.Time) error
-	FindVehicleByPlate(workspaceID uint, plate string) (*models.CustomerVehicle, error)
-	FindVehicleBySource(workspaceID uint, source, sourceID string) (*models.CustomerVehicle, error)
-	ClearVehiclePlate(id uint) error
-	RaiseVehicleMileage(id uint, km int) error
-	CreateServiceRecord(sr *models.ServiceRecord) error
-	SaveServiceRecord(sr *models.ServiceRecord) error
-	TouchServiceRecordSynced(id uint, at time.Time) error
-	FindServiceRecordBySource(workspaceID uint, source, sourceID string) (*models.ServiceRecord, error)
+	CustomersForImport(workspaceID uint, lookup repository.CustomerImportLookup) ([]models.Customer, error)
+	VehiclesForImport(workspaceID uint, sourceIDs, plates []string) ([]models.CustomerVehicle, error)
+	ServiceRecordsForImport(workspaceID uint, sourceIDs []string) ([]models.ServiceRecord, error)
+	CreateCustomers(rows []*models.Customer) error
+	UpsertCustomers(rows []*models.Customer) error
+	ReleaseCustomerKeys(ids []uint) error
+	TouchCustomers(ids []uint, at time.Time) error
+	CreateVehicles(rows []*models.CustomerVehicle) error
+	UpsertVehicles(rows []*models.CustomerVehicle) error
+	ReleaseVehicleKeys(ids []uint) error
+	TouchVehicles(ids []uint, at time.Time) error
+	CreateServiceRecords(rows []*models.ServiceRecord) error
+	UpsertServiceRecords(rows []*models.ServiceRecord) error
+	TouchServiceRecords(ids []uint, at time.Time) error
+}
+
+// transactional é o repositório real: o lote inteiro grava numa transação só.
+type transactional interface {
+	Transaction(fn func(tx *repository.CustomerRepository) error) error
 }
 
 type SyncRunStore interface {
@@ -174,10 +178,14 @@ func (s *OnMotorSyncService) importBatch(wsID uint, trigger string, in ImportInp
 		}
 	}
 
-	imp := &importer{store: s.store, wsID: wsID, run: run, now: now}
-	if err := imp.importAll(in); err != nil {
-		// Guarda o que já foi contado; o lote pode ser reenviado (upsert idempotente).
-		_ = s.runs.SaveRun(run)
+	saved := *run
+	saved.Warnings = append(models.StringList{}, run.Warnings...)
+	if err := s.inTransaction(func(store OnMotorStore) error {
+		imp := &importer{store: store, wsID: wsID, run: run, now: now}
+		return imp.importAll(in)
+	}); err != nil {
+		// A transação foi desfeita: contadores voltam ao que eram; o lote pode ser reenviado.
+		*run = saved
 		return nil, err
 	}
 
@@ -194,6 +202,13 @@ func (s *OnMotorSyncService) importBatch(wsID uint, trigger string, in ImportInp
 	return resultOf(run), nil
 }
 
+func (s *OnMotorSyncService) inTransaction(fn func(OnMotorStore) error) error {
+	if tx, ok := s.store.(transactional); ok {
+		return tx.Transaction(func(r *repository.CustomerRepository) error { return fn(r) })
+	}
+	return fn(s.store)
+}
+
 func resultOf(run *models.SyncRun) *ImportResult {
 	return &ImportResult{
 		RunID:  run.ID,
@@ -208,12 +223,15 @@ func resultOf(run *models.SyncRun) *ImportResult {
 	}
 }
 
-// importer processa um lote. Avisos nunca levam dados pessoais: só ids, posições e nomes de campo.
+// importer processa um lote. Avisos nunca levam dados pessoais: só ids numéricos do OnMotor,
+// ids locais, posições no lote e nomes de campo.
 type importer struct {
-	store OnMotorStore
-	wsID  uint
-	run   *models.SyncRun
-	now   time.Time
+	store      OnMotorStore
+	wsID       uint
+	run        *models.SyncRun
+	now        time.Time
+	cache      *importCache
+	keyChanges []*trackedCustomer
 }
 
 const warningsTruncated = "demais avisos omitidos (limite de 200)"
@@ -232,23 +250,35 @@ func (imp *importer) skip(format string, args ...any) {
 	imp.warn(format, args...)
 }
 
+// importAll: pré-carga (3 consultas), depois clientes, veículos e OS, cada etapa gravada em lote.
+// Clientes vão antes dos veículos e veículos antes das OS para os vínculos já terem id.
 func (imp *importer) importAll(in ImportInput) error {
-	for i, rec := range in.Customers {
-		if err := imp.customer(i+1, rec); err != nil {
-			return err
-		}
+	cache, err := loadImportCache(imp.store, imp.wsID, in)
+	if err != nil {
+		return err
 	}
+	imp.cache = cache
+	for i, rec := range in.Customers {
+		imp.customer(i+1, rec)
+	}
+	if err := imp.flushCustomers(); err != nil {
+		return err
+	}
+	imp.warnKeyChanges()
 	for i, rec := range in.Vehicles {
-		if err := imp.vehicle(i+1, rec); err != nil {
-			return err
-		}
+		imp.vehicle(i+1, rec)
+	}
+	if err := imp.flushVehicles(); err != nil {
+		return err
 	}
 	for i, rec := range in.Services {
-		if err := imp.service(i+1, rec); err != nil {
-			return err
-		}
+		imp.service(i+1, rec)
 	}
-	return nil
+	if err := imp.flushServices(); err != nil {
+		return err
+	}
+	// O km das OS pode ter subido o last_mileage de veículos.
+	return imp.flushVehicles()
 }
 
 // normalized grava o campo normalizado; inválido vira "" com aviso. Ausente/null mantém.
@@ -291,18 +321,4 @@ func (imp *importer) timeField(label, field string, in FlexString, target **time
 		imp.warn("%s: %s inválido (campo ignorado)", label, field)
 	}
 	*target = t
-}
-
-func describeCustomer(c *models.Customer) string {
-	if c.SourceID != nil {
-		return "OnMotor " + *c.SourceID
-	}
-	return fmt.Sprintf("local #%d", c.ID)
-}
-
-func describeVehicle(v *models.CustomerVehicle) string {
-	if v.SourceID != nil {
-		return "OnMotor " + *v.SourceID
-	}
-	return fmt.Sprintf("local #%d", v.ID)
 }

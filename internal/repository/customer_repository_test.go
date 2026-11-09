@@ -49,21 +49,6 @@ func TestCustomerRepository_FindersAreWorkspaceScoped(t *testing.T) {
 	assert.Equal(t, "Maria Souza", got.Name)
 }
 
-func TestCustomerRepository_TouchCustomerSyncedKeepsUpdatedAt(t *testing.T) {
-	db := setupTestDB(t)
-	repo := NewCustomerRepository(db)
-	c := seedCustomer(t, repo, models.Customer{WorkspaceID: 1, Name: "Maria"})
-	old := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	require.NoError(t, db.Model(c).UpdateColumn("updated_at", old).Error)
-
-	at := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
-	require.NoError(t, repo.TouchCustomerSynced(c.ID, at))
-	got, _ := repo.FindCustomer(1, c.ID)
-	require.NotNil(t, got.SyncedAt)
-	assert.True(t, at.Equal(*got.SyncedAt))
-	assert.True(t, old.Equal(got.UpdatedAt))
-}
-
 func TestCustomerRepository_SearchCustomers(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewCustomerRepository(db)
