@@ -63,6 +63,11 @@ var customerValidationErrors = []error{
 	services.ErrInvalidBirthDate,
 	services.ErrInvalidPersonType,
 	services.ErrInvalidUF,
+	services.ErrPlateRequired,
+	services.ErrInvalidYear,
+	services.ErrInvalidDoors,
+	services.ErrInvalidMileage,
+	services.ErrInvalidCustomer,
 }
 
 // respondCustomerError: 403 mecânico, 404 sem oficina/inexistente/outra oficina,
@@ -77,7 +82,8 @@ func respondCustomerError(c *gin.Context, err error) {
 		utils.RespondError(c, http.StatusForbidden, err.Error())
 		return
 	case errors.Is(err, services.ErrNoWorkspace),
-		errors.Is(err, services.ErrCustomerNotFound):
+		errors.Is(err, services.ErrCustomerNotFound),
+		errors.Is(err, services.ErrCustomerVehicleNotFound):
 		utils.RespondError(c, http.StatusNotFound, err.Error())
 		return
 	}

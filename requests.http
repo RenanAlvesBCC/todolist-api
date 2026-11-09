@@ -490,3 +490,51 @@ Content-Type: application/json
 ### Mecanico nao acessa clientes (403)
 GET {{baseUrl}}/api/customers
 Authorization: Bearer {{loginMechanic.response.body.token}}
+
+### ---- Veiculos do cliente e historico (so dono/gerente) ----
+
+### Cadastrar veiculo do cliente
+# @name createCustomerVehicle
+POST {{baseUrl}}/api/customers/{{createCustomer.response.body.id}}/vehicles
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "plate": "abc-1d23",
+  "manufacturer": "VW",
+  "model": "Gol 1.6",
+  "year_fab": 2014,
+  "year_model": 2015,
+  "color": "Prata",
+  "last_mileage": 87500
+}
+
+### Placa repetida (409 com existing_id)
+POST {{baseUrl}}/api/customers/{{createCustomer.response.body.id}}/vehicles
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "plate": "ABC1D23"
+}
+
+### Veiculos do cliente
+GET {{baseUrl}}/api/customers/{{createCustomer.response.body.id}}/vehicles
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Editar veiculo do cliente
+PUT {{baseUrl}}/api/customer-vehicles/{{createCustomerVehicle.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "color": "Preto"
+}
+
+### Reconhecer carro pela placa
+GET {{baseUrl}}/api/customer-vehicles/lookup?plate=ABC-1D23
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Historico do carro (OnMotor + atendimentos)
+GET {{baseUrl}}/api/customer-vehicles/{{createCustomerVehicle.response.body.id}}/history
+Authorization: Bearer {{loginOwner.response.body.token}}

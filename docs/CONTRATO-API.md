@@ -379,6 +379,72 @@ Edita cliente local ou importado. **Chave ausente ou `null` mantém** o valor; c
 
 Cliente importado (`source = onmotor`) pode ser editado, mas a **próxima sincronização sobrescreve** os campos que vierem do OnMotor.
 
+## Veículos do cliente
+
+Cadastro permanente do carro do cliente (diferente do **atendimento** em `/api/lists`, que é uma passagem pela oficina). Só `owner`/`manager`; mecânico → 403; outra oficina → 404.
+
+`plate` é normalizada: só letras e números, maiúsculas (`abc-1d23` → `ABC1D23`). Placa é **única por oficina** quando preenchida (veículos importados podem vir sem placa).
+
+```json
+{
+  "id": 30, "workspace_id": 1, "customer_id": 12, "source": "onmotor", "source_id": "889",
+  "plate": "ABC1D23", "manufacturer": "VW", "model": "Gol 1.6", "transmission": "Manual",
+  "year_fab": 2014, "year_model": 2015, "fuel": "Flex", "engine": "1.6", "doors": 4,
+  "color": "Prata", "chassis": "9BWAB45U0FT000000", "renavam": "00000000000",
+  "last_mileage": 87500,
+  "created_at": "...", "updated_at": "...", "synced_at": "..."
+}
+```
+
+`customer_id` pode ser `null` (dono desconhecido na importação). `year_fab`, `year_model` (1900 até ano atual + 2), `doors` (0–10) e `last_mileage` (0–2000000) são inteiros ou `null`. `last_mileage` sobe automaticamente quando uma OS importada traz km maior.
+
+### GET /api/customers/:id/vehicles
+200 com array de veículos do cliente (por placa). Cliente inexistente/outra oficina → 404.
+
+### POST /api/customers/:id/vehicles
+Cria veículo **local** para o cliente. `plate` obrigatória (`placa é obrigatória`). O dono é o `:id` da rota (`customer_id` do body é ignorado). 201 com o veículo.
+
+- 409 `{ "error": "placa já cadastrada em outro veículo", "existing_id": 30 }`
+- 400 `ano inválido`, `número de portas inválido`, `quilometragem inválida`, `dados inválidos` (tipo errado, ex.: `"year_model": "2015"`)
+
+### PUT /api/customer-vehicles/:id
+Edita veículo local ou importado (a próxima sincronização pode sobrescrever o importado). Chave ausente ou `null` mantém. `customer_id` transfere o carro para outro cliente da mesma oficina (senão 400 `cliente inválido`). Se enviada, `plate` não pode ficar vazia. Mesmo 409 de placa.
+
+### GET /api/customer-vehicles/lookup?plate=ABC-1D23
+Reconhece um carro conhecido pela placa (aceita máscara). 200 `{ "vehicle": { ... }, "customer": { ... } }` (`customer` = `null` se o veículo não tem dono). 404 `veículo do cliente não encontrado`; 400 `placa é obrigatória`.
+
+### GET /api/customer-vehicles/:id/history
+Histórico do carro juntando (a) OS importadas do OnMotor e (b) nossos atendimentos (`/api/lists`) vinculados ao veículo (`customer_vehicle_id`). Ordem: `opened_at` mais recente primeiro; registros sem data no fim.
+
+```json
+{
+  "records": [
+    {
+      "source": "rmaxx", "id": 57, "list_id": 57,
+      "opened_at": "2026-11-09T13:00:00Z", "delivered_at": null,
+      "mileage": 91000, "status": "em_andamento", "type": "",
+      "summary": "Alinhamento; Balanceamento", "items": null, "total": null
+    },
+    {
+      "source": "onmotor", "id": 812, "list_id": null,
+      "opened_at": "2026-03-10T12:00:00Z", "delivered_at": "2026-03-12T20:00:00Z",
+      "mileage": 80000, "status": "Entregue", "type": "Revisão",
+      "summary": "Troca de óleo; Filtro de óleo",
+      "items": [
+        { "kind": "servico", "description": "Troca de óleo", "quantity": 1, "unit_price": 120, "total": 120 },
+        { "kind": "peca", "description": "Filtro de óleo", "quantity": 1, "unit_price": 45.9, "total": 45.9 }
+      ],
+      "total": 165.9
+    }
+  ]
+}
+```
+
+- `source`: `onmotor` (OS importada; `id` = id da OS aqui) | `rmaxx` (nosso atendimento; `id` = `list_id` = id do veículo em `/api/lists`).
+- `opened_at`: abertura da OS / criação do atendimento. `status`: texto do OnMotor como veio, ou o status da esteira.
+- `summary`: notas da OS ou, sem notas, até 3 descrições de itens; no nosso atendimento, até 3 serviços (`items` da esteira) ou o título. Máx. 200 caracteres.
+- `items` só para `onmotor` (formato flexível, como importado); `null` para `rmaxx`.
+
 ## Auditoria (owner/manager)
 
 ### GET /api/audit
@@ -460,7 +526,7 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 ## Erros comuns
 
 - 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `quilometragem inválida`, `nome é obrigatório`, `CNPJ inválido`, ...)
-- 409 cadastro duplicado na oficina: `{ "error": "...", "existing_id": 12 }` (CPF de cliente)
+- 409 cadastro duplicado na oficina: `{ "error": "...", "existing_id": 12 }` (CPF de cliente, placa de veículo do cliente)
 - 401 token ausente, inválido ou na blacklist
 - 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)

@@ -27,6 +27,12 @@ type CustomerStore interface {
 	SearchCustomers(workspaceID uint, filter repository.CustomerFilter) ([]models.Customer, int64, error)
 	LastServiceAt(workspaceID uint, customerIDs []uint) (map[uint]time.Time, error)
 	VehiclesByCustomers(workspaceID uint, customerIDs []uint) ([]models.CustomerVehicle, error)
+	CreateVehicle(v *models.CustomerVehicle) error
+	SaveVehicle(v *models.CustomerVehicle) error
+	FindVehicle(workspaceID, id uint) (*models.CustomerVehicle, error)
+	FindVehicleByPlate(workspaceID uint, plate string) (*models.CustomerVehicle, error)
+	ServiceRecordsByVehicle(workspaceID, vehicleID uint) ([]models.ServiceRecord, error)
+	TaskListsByCustomerVehicle(workspaceID, vehicleID uint) ([]models.TaskList, error)
 }
 
 type CustomerService struct {

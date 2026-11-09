@@ -62,9 +62,10 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(auditService)
 	noteHandler := handlers.NewVehicleNoteHandler(noteService)
 	customerHandler := handlers.NewCustomerHandler(customerService)
+	customerVehicleHandler := handlers.NewCustomerVehicleHandler(customerService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, noteHandler, customerHandler, secRepo)
+	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, noteHandler, customerHandler, customerVehicleHandler, secRepo)
 
 	port := os.Getenv("PORT")
 	if port == "" {
