@@ -10,6 +10,7 @@ import (
 type customerSnapshot struct {
 	source, sourceID, name, personType, cpf, cnpj, rg, phone, mobile, email, emailSecondary string
 	cep, street, number, complement, district, city, uf, birthDate, notes                   string
+	lastVisit, sourceUpdated                                                                int64
 }
 
 func snapshotCustomer(c *models.Customer) customerSnapshot {
@@ -17,7 +18,7 @@ func snapshotCustomer(c *models.Customer) customerSnapshot {
 		source: c.Source, name: c.Name, personType: c.PersonType, cpf: c.CPF, cnpj: c.CNPJ, rg: c.RG,
 		phone: c.Phone, mobile: c.Mobile, email: c.Email, emailSecondary: c.EmailSecondary, cep: c.CEP,
 		street: c.Street, number: c.Number, complement: c.Complement, district: c.District, city: c.City,
-		uf: c.UF, notes: c.Notes,
+		uf: c.UF, notes: c.Notes, lastVisit: optTime(c.LastVisitAt), sourceUpdated: optTime(c.SourceUpdatedAt),
 	}
 	if c.SourceID != nil {
 		s.sourceID = *c.SourceID
@@ -61,6 +62,9 @@ func (imp *importer) customer(pos int, rec ImportCustomer) error {
 		target = &models.Customer{WorkspaceID: imp.wsID}
 	}
 	before := snapshotCustomer(target)
+	if !isNew && notNewer(rec.SourceUpdatedAt, target.SourceUpdatedAt) {
+		return imp.customerVisitOnly(target, before, rec.LastVisitAt)
+	}
 	target.Source = models.SourceOnMotor
 	target.SourceID = &sourceID
 
@@ -86,6 +90,8 @@ func (imp *importer) customer(pos int, rec ImportCustomer) error {
 	} {
 		plainField(f.in, f.target)
 	}
+	imp.timeField(label, "last_visit_at", rec.LastVisitAt, &target.LastVisitAt)
+	imp.timeField(label, "source_updated_at", rec.SourceUpdatedAt, &target.SourceUpdatedAt)
 	if rec.BirthDate.Set {
 		d, err := parseBirthDate(rec.BirthDate.Value, imp.now)
 		if err != nil {
@@ -122,6 +128,34 @@ func (imp *importer) customer(pos int, rec ImportCustomer) error {
 	default:
 		return imp.store.TouchCustomerSynced(target.ID, imp.now)
 	}
+	return nil
+}
+
+// notNewer: a "Data de edição" recebida não é posterior à já gravada (cadastro sem edição nova no OnMotor).
+func notNewer(incoming FlexString, stored *time.Time) bool {
+	if !incoming.Set || stored == nil {
+		return false
+	}
+	t, err := parseImportTime(incoming.Value)
+	return err == nil && t != nil && !t.After(*stored)
+}
+
+// customerVisitOnly: sem edição nova, os dados cadastrais ficam como estão; só a última visita
+// avança (ela muda no OnMotor sem alterar a data de edição do cadastro).
+func (imp *importer) customerVisitOnly(c *models.Customer, before customerSnapshot, lastVisit FlexString) error {
+	if lastVisit.Set {
+		if t, err := parseImportTime(lastVisit.Value); err == nil && t != nil && (c.LastVisitAt == nil || t.After(*c.LastVisitAt)) {
+			c.LastVisitAt = t
+		}
+	}
+	if snapshotCustomer(c) == before {
+		return imp.store.TouchCustomerSynced(c.ID, imp.now)
+	}
+	c.SyncedAt = &imp.now
+	if err := imp.store.SaveCustomer(c); err != nil {
+		return err
+	}
+	imp.run.CustomersUpdated++
 	return nil
 }
 

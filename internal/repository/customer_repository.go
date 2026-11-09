@@ -70,7 +70,8 @@ func firstOrNil[T any](query *gorm.DB) (*T, error) {
 	return &out, nil
 }
 
-// SearchCustomers pagina os clientes da oficina, mais recentemente atualizados primeiro.
+// SearchCustomers pagina os clientes da oficina: última visita (OnMotor) mais recente primeiro,
+// clientes sem visita no fim; desempate por updated_at e id, decrescentes.
 // search (sem diferenciar maiúsculas) casa com nome, e-mails, documentos/telefones
 // (só dígitos, quando o termo não tem letras) e placas dos veículos do cliente.
 func (r *CustomerRepository) SearchCustomers(workspaceID uint, filter CustomerFilter) ([]models.Customer, int64, error) {
@@ -88,6 +89,9 @@ func (r *CustomerRepository) SearchCustomers(workspaceID uint, filter CustomerFi
 	}
 	var customers []models.Customer
 	if err := query().
+		// CASE em vez de NULLS LAST: o Postgres põe NULL primeiro no DESC; o SQLite, por último.
+		Order("CASE WHEN customers.last_visit_at IS NULL THEN 1 ELSE 0 END").
+		Order("customers.last_visit_at desc").
 		Order("customers.updated_at desc").
 		Order("customers.id desc").
 		Offset((filter.Page - 1) * filter.Limit).Limit(filter.Limit).

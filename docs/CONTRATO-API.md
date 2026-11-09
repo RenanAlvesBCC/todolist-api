@@ -340,6 +340,7 @@ Documentos, telefones e CEP são gravados **só com dígitos** (a entrada aceita
   "cep": "01310100", "street": "Av. Paulista", "number": "1000", "complement": "ap 1",
   "district": "Bela Vista", "city": "São Paulo", "uf": "SP",
   "birth_date": "1980-05-03", "notes": "",
+  "last_visit_at": "2026-11-07T17:32:00Z", "source_updated_at": "2026-10-01T11:00:00Z",
   "created_at": "2026-11-09T19:00:00Z", "updated_at": "2026-11-09T19:00:00Z", "synced_at": "2026-11-09T19:00:00Z",
   "vehicles": [ /* ver abaixo */ ],
   "last_service_at": "2026-10-20T13:10:00Z"
@@ -359,14 +360,16 @@ Documentos, telefones e CEP são gravados **só com dígitos** (a entrada aceita
 | `birth_date` | `""`/`null` ou `AAAA-MM-DD`, `DD/MM/AAAA`; não pode ser futura nem antes de 1900 (`data de nascimento inválida`). Resposta sempre `AAAA-MM-DD` ou `null` |
 | `rg`, `street`, `number`, `complement`, `district`, `city`, `notes` | texto livre (trim) |
 
-`last_service_at`: o mais recente entre a abertura (`opened_at`) das OS importadas do cliente e a criação dos nossos atendimentos (`/api/lists`) vinculados a ele; `null` se nunca houve.
+`last_visit_at`: "Última vez na oficina" vinda do OnMotor (UTC; `null` se nunca veio). `source_updated_at`: "Data de edição" do cadastro no OnMotor (UTC; `null` em cadastros locais). Os dois só são gravados pela importação (o POST/PUT de clientes os ignora) e aparecem na busca e no detalhe.
+
+`last_service_at`: o mais recente entre a abertura (`opened_at`) das OS importadas do cliente, a criação dos nossos atendimentos (`/api/lists`) vinculados a ele e o `last_visit_at`; `null` se nenhum existir.
 
 ### GET /api/customers
 Query: `search`, `page`, `limit` (mesmos limites de `/api/lists`: `page` mínimo 1; `limit` 1–100, fora disso 20).
 
 `search` não diferencia maiúsculas e casa com: nome, e-mails, **placa** de qualquer veículo do cliente (ignora `-` e espaços) e — quando o termo não tem letras — CPF, CNPJ, telefone e celular comparando só os dígitos (`123.456.789-09`, `(11) 98765` funcionam).
 
-Ordem: **atualizados mais recentemente primeiro** (`updated_at` desc, desempate `id` desc). Importações que não mudam nada no cadastro não alteram `updated_at`.
+Ordem: **última visita mais recente primeiro** (`last_visit_at` desc; clientes sem `last_visit_at` vão para o fim), depois `updated_at` desc e `id` desc. Importações que não mudam nada no cadastro não alteram `updated_at`. Atendimentos nossos não mexem em `last_visit_at` (entram no `last_service_at`, não na ordem) — a próxima sincronização traz a visita registrada no OnMotor.
 
 ```json
 {
@@ -500,7 +503,8 @@ Body (todas as listas opcionais; até **1000 registros por lista** por chamada, 
     { "source_id": "4521", "name": "Maria Souza", "person_type": "F", "cpf": "123.456.789-09", "cnpj": "", "rg": "12.345.678-9",
       "phone": "(11) 3333-4444", "mobile": "(11) 98765-4321", "email": "maria@exemplo.com", "email_secondary": "",
       "cep": "01310-100", "street": "Av. Paulista", "number": "1000", "complement": "", "district": "Bela Vista",
-      "city": "São Paulo", "uf": "SP", "birth_date": "03/05/1980", "notes": "" }
+      "city": "São Paulo", "uf": "SP", "birth_date": "03/05/1980", "notes": "",
+      "last_visit_at": "2026-11-07T14:32:00-03:00", "source_updated_at": "2026-10-01 08:00" }
   ],
   "vehicles": [
     { "source_id": "889", "customer_source_id": "4521", "plate": "ABC-1D23", "manufacturer": "VW", "model": "Gol 1.6",
@@ -541,9 +545,11 @@ Resposta 200:
 
 **Regras de importação (upsert):**
 - Chave de cada entidade: (oficina, `source = onmotor`, `source_id`). Reenviar o mesmo dado não cria nem conta atualização (só renova `synced_at`); mudança real conta em `*_updated`.
+- `source_id` é texto livre. A exportação de clientes do OnMotor não traz id, então o parser deriva chaves estáveis: cliente `cpf:<dígitos>` | `cnpj:<dígitos>` | `nome:<nome normalizado>|cel:<dígitos>`; veículo `placa:<PLACA>` com `customer_source_id` = chave do cliente. Se o `customer_source_id` de um veículo mudar entre execuções (carro vendido), o veículo passa para o novo dono. Atenção: se a chave de um cliente mudar (ex.: ganhou CPF e deixou de ser `nome:...|cel:...`), ele vira um cliente novo — o antigo continua (nada é apagado).
+- **Data de edição (`source_updated_at`):** se o cliente já tem `source_updated_at` gravado e o lote traz uma data **igual ou anterior**, os dados cadastrais **não são alterados** (só `synced_at` é renovado); apenas `last_visit_at` avança, se vier uma visita mais recente. Sem `source_updated_at` no lote (ou inválido), vale a regra normal. Datas de edição/visita aceitam ISO 8601 com fuso (`2026-11-07T14:32:00-03:00`) ou os formatos sem fuso (horário de Brasília).
 - **Nunca apaga** nada: o que sumir do OnMotor continua aqui.
 - **Merge com cadastros locais:** cliente importado sem correspondente por `source_id` mas com o **mesmo CPF** de um cliente local (sem `source_id`) vira esse cliente (`source` → `onmotor`); idem veículo local com a **mesma placa**.
-- **Campo inválido não derruba o lote:** o registro é gravado com o campo vazio/`null` e um aviso (CPF, CNPJ, telefone, celular, e-mail, CEP, UF, tipo de pessoa, data de nascimento, anos, portas, km, datas da OS, `items`, `total`).
+- **Campo inválido não derruba o lote:** o registro é gravado com o campo vazio/`null` e um aviso (CPF, CNPJ, telefone, celular, e-mail, CEP, UF, tipo de pessoa, data de nascimento, `last_visit_at`, `source_updated_at`, anos, portas, km, datas da OS, `items`, `total`).
 - **Ignorado (`skipped`)** só quando não dá para gravar: sem `source_id`, ou cliente novo sem `name`.
 - **CPF duplicado** entre clientes: fica com o primeiro que já o tem; o outro é gravado sem CPF + aviso.
 - **Placa duplicada** entre veículos: a última gravação vence; o veículo anterior fica sem placa + aviso.

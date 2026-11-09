@@ -180,3 +180,27 @@ func TestCustomerRepository_ErrorsWhenDatabaseIsClosed(t *testing.T) {
 	_, err = repo.LastServiceAt(1, []uint{1})
 	assert.Error(t, err)
 }
+
+func TestCustomerRepository_SearchOrdersByLastVisit(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewCustomerRepository(db)
+	jan := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	nov := time.Date(2026, 11, 7, 17, 32, 0, 0, time.UTC)
+	older := seedCustomer(t, repo, models.Customer{WorkspaceID: 1, Name: "Visitou em janeiro", LastVisitAt: &jan})
+	never := seedCustomer(t, repo, models.Customer{WorkspaceID: 1, Name: "Nunca visitou"})
+	recent := seedCustomer(t, repo, models.Customer{WorkspaceID: 1, Name: "Visitou em novembro", LastVisitAt: &nov})
+	neverOld := seedCustomer(t, repo, models.Customer{WorkspaceID: 1, Name: "Nunca visitou, antigo"})
+	require.NoError(t, db.Model(neverOld).UpdateColumn("updated_at", time.Now().Add(-48*time.Hour)).Error)
+	// Atualizado agora, mas visitou há mais tempo: a visita manda na ordem.
+	require.NoError(t, db.Model(older).UpdateColumn("updated_at", time.Now().Add(time.Hour)).Error)
+
+	got, _, err := repo.SearchCustomers(1, CustomerFilter{Page: 1, Limit: 10})
+	require.NoError(t, err)
+	ids := make([]uint, len(got))
+	for i, c := range got {
+		ids[i] = c.ID
+	}
+	assert.Equal(t, []uint{recent.ID, older.ID, never.ID, neverOld.ID}, ids)
+	require.NotNil(t, got[0].LastVisitAt)
+	assert.True(t, nov.Equal(*got[0].LastVisitAt))
+}

@@ -330,3 +330,37 @@ func (roleErrorStore) FindByMemberUserID(userID uint) (*models.Workspace, error)
 func (roleErrorStore) GetMemberRole(workspaceID, userID uint) (models.WorkspaceRole, error) {
 	return "", assert.AnError
 }
+
+func TestCustomerService_LastServiceAtIncludesLastVisit(t *testing.T) {
+	f := newCustomerFixture(t)
+	visit := time.Date(2026, 11, 7, 14, 32, 0, 0, time.FixedZone("BRT", -3*3600))
+	edited := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
+	onlyVisit := &models.Customer{WorkspaceID: fxWorkspaceID, Name: "Só visita", LastVisitAt: &visit, SourceUpdatedAt: &edited}
+	require.NoError(t, f.db.Create(onlyVisit).Error)
+
+	older := time.Date(2025, 5, 1, 10, 0, 0, 0, time.UTC)
+	osNewer := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
+	mixed := &models.Customer{WorkspaceID: fxWorkspaceID, Name: "OS mais nova", LastVisitAt: &older}
+	require.NoError(t, f.db.Create(mixed).Error)
+	require.NoError(t, f.db.Create(&models.ServiceRecord{WorkspaceID: fxWorkspaceID, SourceID: "1", CustomerID: &mixed.ID, OpenedAt: &osNewer}).Error)
+
+	detail, err := f.svc.GetCustomer(fxOwner, onlyVisit.ID)
+	require.NoError(t, err)
+	require.NotNil(t, detail.LastServiceAt)
+	assert.True(t, visit.Equal(*detail.LastServiceAt), "sem OS nem atendimento: usa a última visita")
+	assert.Equal(t, time.UTC, detail.LastServiceAt.Location())
+	body := jsonKeys(t, detail)
+	assert.NotNil(t, body["last_visit_at"])
+	assert.NotNil(t, body["source_updated_at"])
+
+	detail, err = f.svc.GetCustomer(fxOwner, mixed.ID)
+	require.NoError(t, err)
+	assert.True(t, osNewer.Equal(*detail.LastServiceAt), "OS mais recente que a visita")
+
+	page, err := f.svc.ListCustomers(fxManager, "", 1, 20)
+	require.NoError(t, err)
+	require.Len(t, page.Customers, 2)
+	assert.Equal(t, onlyVisit.ID, page.Customers[0].ID, "ordem pela última visita")
+	assert.Contains(t, jsonKeys(t, page.Customers[0]), "last_visit_at")
+	assert.True(t, visit.Equal(*page.Customers[0].LastServiceAt))
+}

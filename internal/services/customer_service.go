@@ -134,7 +134,7 @@ func (s *CustomerService) ListCustomers(userID uint, search string, page, limit 
 				YearModel: v.YearModel, LastMileage: v.LastMileage,
 			})
 		}
-		items[i] = CustomerListItem{Customer: c, Vehicles: summaries, LastServiceAt: lastService(c.ID)}
+		items[i] = CustomerListItem{Customer: c, Vehicles: summaries, LastServiceAt: lastService(&c)}
 	}
 
 	return &PaginatedCustomers{
@@ -146,8 +146,9 @@ func (s *CustomerService) ListCustomers(userID uint, search string, page, limit 
 	}, nil
 }
 
-// related carrega veículos (por cliente) e data do último atendimento dos clientes.
-func (s *CustomerService) related(wsID uint, ids []uint) (map[uint][]models.CustomerVehicle, func(uint) *time.Time, error) {
+// related carrega veículos (por cliente) e a data do último atendimento: o mais recente entre
+// OS importadas, nossos atendimentos vinculados e a última visita registrada no OnMotor.
+func (s *CustomerService) related(wsID uint, ids []uint) (map[uint][]models.CustomerVehicle, func(*models.Customer) *time.Time, error) {
 	vehicles, err := s.store.VehiclesByCustomers(wsID, ids)
 	if err != nil {
 		return nil, nil, err
@@ -160,12 +161,16 @@ func (s *CustomerService) related(wsID uint, ids []uint) (map[uint][]models.Cust
 	for _, v := range vehicles {
 		byCustomer[*v.CustomerID] = append(byCustomer[*v.CustomerID], v)
 	}
-	lastService := func(id uint) *time.Time {
-		if at, ok := last[id]; ok {
-			at = at.UTC()
-			return &at
+	lastService := func(c *models.Customer) *time.Time {
+		at, ok := last[c.ID]
+		if c.LastVisitAt != nil && (!ok || c.LastVisitAt.After(at)) {
+			at, ok = *c.LastVisitAt, true
 		}
-		return nil
+		if !ok {
+			return nil
+		}
+		at = at.UTC()
+		return &at
 	}
 	return byCustomer, lastService, nil
 }
@@ -179,7 +184,7 @@ func (s *CustomerService) detail(wsID uint, c *models.Customer) (*CustomerDetail
 	if list == nil {
 		list = []models.CustomerVehicle{}
 	}
-	return &CustomerDetail{Customer: *c, Vehicles: list, LastServiceAt: lastService(c.ID)}, nil
+	return &CustomerDetail{Customer: *c, Vehicles: list, LastServiceAt: lastService(c)}, nil
 }
 
 func (s *CustomerService) findCustomer(wsID, id uint) (*models.Customer, error) {

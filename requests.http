@@ -637,3 +637,20 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 ### Revogar token de integracao
 DELETE {{baseUrl}}/api/integrations/tokens/{{createIntegrationToken.response.body.id}}
 Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Painel: planilha de clientes do OnMotor (sem id: chaves derivadas pelo parser; servicos desligados)
+POST {{baseUrl}}/api/integrations/onmotor/import/manual
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "customers": [
+    { "source_id": "cpf:12345678909", "name": "Maria Souza", "cpf": "123.456.789-09",
+      "last_visit_at": "2026-11-07T14:32:00-03:00", "source_updated_at": "2026-10-01 08:00" },
+    { "source_id": "nome:joao da silva|cel:11987654321", "name": "Joao da Silva", "mobile": "(11) 98765-4321" }
+  ],
+  "vehicles": [
+    { "source_id": "placa:ABC1D23", "customer_source_id": "cpf:12345678909", "plate": "ABC1D23", "model": "Gol" }
+  ],
+  "final": true
+}

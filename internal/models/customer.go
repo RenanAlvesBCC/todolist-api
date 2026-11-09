@@ -27,21 +27,25 @@ type Customer struct {
 	RG          string  `gorm:"column:rg;not null;default:''" json:"rg"`
 	Phone       string  `gorm:"not null;default:''" json:"phone"`
 	// Celular / WhatsApp.
-	Mobile         string     `gorm:"not null;default:''" json:"mobile"`
-	Email          string     `gorm:"not null;default:''" json:"email"`
-	EmailSecondary string     `gorm:"column:email_secondary;not null;default:''" json:"email_secondary"`
-	CEP            string     `gorm:"column:cep;not null;default:''" json:"cep"`
-	Street         string     `gorm:"not null;default:''" json:"street"`
-	Number         string     `gorm:"not null;default:''" json:"number"`
-	Complement     string     `gorm:"not null;default:''" json:"complement"`
-	District       string     `gorm:"not null;default:''" json:"district"`
-	City           string     `gorm:"not null;default:''" json:"city"`
-	UF             string     `gorm:"column:uf;not null;default:''" json:"uf"`
-	BirthDate      *Date      `json:"birth_date"`
-	Notes          string     `gorm:"not null;default:''" json:"notes"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	SyncedAt       *time.Time `json:"synced_at"`
+	Mobile         string `gorm:"not null;default:''" json:"mobile"`
+	Email          string `gorm:"not null;default:''" json:"email"`
+	EmailSecondary string `gorm:"column:email_secondary;not null;default:''" json:"email_secondary"`
+	CEP            string `gorm:"column:cep;not null;default:''" json:"cep"`
+	Street         string `gorm:"not null;default:''" json:"street"`
+	Number         string `gorm:"not null;default:''" json:"number"`
+	Complement     string `gorm:"not null;default:''" json:"complement"`
+	District       string `gorm:"not null;default:''" json:"district"`
+	City           string `gorm:"not null;default:''" json:"city"`
+	UF             string `gorm:"column:uf;not null;default:''" json:"uf"`
+	BirthDate      *Date  `json:"birth_date"`
+	Notes          string `gorm:"not null;default:''" json:"notes"`
+	// "Última vez na oficina" no OnMotor.
+	LastVisitAt *time.Time `gorm:"index" json:"last_visit_at"`
+	// "Data de edição" do cadastro no OnMotor.
+	SourceUpdatedAt *time.Time `json:"source_updated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	SyncedAt        *time.Time `json:"synced_at"`
 }
 
 // CustomerVehicle é o carro do cliente (cadastro permanente, diferente do

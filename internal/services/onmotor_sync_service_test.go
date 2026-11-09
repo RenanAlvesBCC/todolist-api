@@ -679,3 +679,122 @@ func TestDuplicateError_Message(t *testing.T) {
 	err := &DuplicateError{Err: ErrPlateTaken, ExistingID: 3}
 	assert.Equal(t, "placa já cadastrada em outro veículo", err.Error())
 }
+
+// Formato real da exportação de clientes do OnMotor: sem id; o parser deriva as chaves.
+const derivedKeysBody = `{
+  "customers": [
+    {"source_id": "cpf:12345678909", "name": "Maria Souza", "cpf": "123.456.789-09",
+     "last_visit_at": "2026-11-07T14:32:00-03:00", "source_updated_at": "2026-10-01 08:00"},
+    {"source_id": "cnpj:11222333000181", "name": "Oficina Parceira Ltda", "cnpj": "11.222.333/0001-81",
+     "last_visit_at": "05/11/2026 10:15"},
+    {"source_id": "nome:joao da silva|cel:11987654321", "name": "João da Silva", "mobile": "(11) 98765-4321"}
+  ],
+  "vehicles": [
+    {"source_id": "placa:ABC1D23", "customer_source_id": "cpf:12345678909", "plate": "ABC1D23", "model": "Gol"},
+    {"source_id": "placa:XYZ9W87", "customer_source_id": "nome:joao da silva|cel:11987654321", "plate": "XYZ9W87", "model": "Uno"}
+  ],
+  "final": true
+}`
+
+func TestImport_DerivedStringKeysLinkVehicles(t *testing.T) {
+	f := newSyncFixture(t)
+	res := f.importBatch(t, decodeImport(t, derivedKeysBody))
+	assert.Equal(t, SyncCounters{CustomersCreated: 3, VehiclesCreated: 2}, res.Counters)
+	assert.Empty(t, res.Warnings)
+
+	maria := f.customerBySource(t, "cpf:12345678909")
+	joao := f.customerBySource(t, "nome:joao da silva|cel:11987654321")
+	assert.Equal(t, maria.ID, *f.vehicleBySource(t, "placa:ABC1D23").CustomerID)
+	assert.Equal(t, joao.ID, *f.vehicleBySource(t, "placa:XYZ9W87").CustomerID)
+
+	require.NotNil(t, maria.LastVisitAt)
+	assert.True(t, time.Date(2026, 11, 7, 17, 32, 0, 0, time.UTC).Equal(*maria.LastVisitAt), "ISO com fuso")
+	require.NotNil(t, maria.SourceUpdatedAt)
+	assert.True(t, time.Date(2026, 10, 1, 11, 0, 0, 0, time.UTC).Equal(*maria.SourceUpdatedAt), "sem fuso = Brasília")
+	parceira := f.customerBySource(t, "cnpj:11222333000181")
+	assert.True(t, time.Date(2026, 11, 5, 13, 15, 0, 0, time.UTC).Equal(*parceira.LastVisitAt))
+	assert.Nil(t, joao.LastVisitAt)
+
+	// Reenvio idêntico não muda nada.
+	res = f.importBatch(t, decodeImport(t, derivedKeysBody))
+	assert.Equal(t, SyncCounters{}, res.Counters)
+}
+
+func TestImport_SoldCarIsRelinkedToNewOwner(t *testing.T) {
+	f := newSyncFixture(t)
+	f.importBatch(t, decodeImport(t, derivedKeysBody))
+	res := f.importBatch(t, decodeImport(t, `{
+		"customers": [{"source_id": "cpf:52998224725", "name": "Novo Dono", "cpf": "529.982.247-25"}],
+		"vehicles": [{"source_id": "placa:ABC1D23", "customer_source_id": "cpf:52998224725", "plate": "ABC1D23", "model": "Gol"}],
+		"final": true}`))
+	assert.Equal(t, SyncCounters{CustomersCreated: 1, VehiclesUpdated: 1}, res.Counters)
+
+	novo := f.customerBySource(t, "cpf:52998224725")
+	gol := f.vehicleBySource(t, "placa:ABC1D23")
+	assert.Equal(t, novo.ID, *gol.CustomerID, "carro vendido passa para o novo dono")
+	vehicles, err := f.repo.VehiclesByCustomers(fxWorkspaceID, []uint{f.customerBySource(t, "cpf:12345678909").ID})
+	require.NoError(t, err)
+	assert.Empty(t, vehicles, "antigo dono fica sem o carro (cadastro dele continua)")
+}
+
+func TestImport_LastVisitAndSourceUpdatedAtValidation(t *testing.T) {
+	f := newSyncFixture(t)
+	res := f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:1","name":"X","last_visit_at":"ontem","source_updated_at":"??"}],"final":true}`))
+	assert.Equal(t, models.SyncStatusPartial, res.Status)
+	assert.Contains(t, res.Warnings, "cliente OnMotor cpf:1: last_visit_at inválido (campo ignorado)")
+	assert.Contains(t, res.Warnings, "cliente OnMotor cpf:1: source_updated_at inválido (campo ignorado)")
+	c := f.customerBySource(t, "cpf:1")
+	assert.Nil(t, c.LastVisitAt)
+	assert.Nil(t, c.SourceUpdatedAt)
+}
+
+func TestImport_SkipsProfileWhenSourceNotEdited(t *testing.T) {
+	f := newSyncFixture(t)
+	f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909","name":"Maria","city":"Santos",
+		"last_visit_at":"2026-10-01T10:00:00-03:00","source_updated_at":"2026-10-01T09:00:00-03:00"}],"final":true}`))
+	first := f.customerBySource(t, "cpf:12345678909")
+
+	// Mesma data de edição: cadastro não muda (nem a cidade), só synced_at.
+	f.clock = f.clock.Add(time.Hour)
+	res := f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909","name":"Maria X","city":"Campinas",
+		"last_visit_at":"2026-10-01T10:00:00-03:00","source_updated_at":"2026-10-01T09:00:00-03:00"}],"final":true}`))
+	assert.Equal(t, SyncCounters{}, res.Counters)
+	got := f.customerBySource(t, "cpf:12345678909")
+	assert.Equal(t, "Santos", got.City)
+	assert.Equal(t, "Maria", got.Name)
+	assert.True(t, first.UpdatedAt.Equal(got.UpdatedAt))
+	assert.True(t, f.clock.Equal(*got.SyncedAt))
+
+	// Data de edição mais antiga, mas visita nova: só a visita avança.
+	res = f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909","city":"Campinas",
+		"last_visit_at":"2026-11-07T14:32:00-03:00","source_updated_at":"2026-09-01T09:00:00-03:00"}],"final":true}`))
+	assert.Equal(t, SyncCounters{CustomersUpdated: 1}, res.Counters)
+	got = f.customerBySource(t, "cpf:12345678909")
+	assert.Equal(t, "Santos", got.City)
+	assert.True(t, time.Date(2026, 11, 7, 17, 32, 0, 0, time.UTC).Equal(*got.LastVisitAt))
+	assert.True(t, time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC).Equal(*got.SourceUpdatedAt), "data de edição não retrocede")
+
+	// Visita mais antiga não retrocede no caminho "sem edição".
+	res = f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909",
+		"last_visit_at":"2026-01-01T10:00:00-03:00","source_updated_at":"2026-10-01T09:00:00-03:00"}],"final":true}`))
+	assert.Equal(t, SyncCounters{}, res.Counters)
+	assert.True(t, time.Date(2026, 11, 7, 17, 32, 0, 0, time.UTC).Equal(*f.customerBySource(t, "cpf:12345678909").LastVisitAt))
+
+	// Edição mais nova: aplica tudo.
+	res = f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909","city":"Campinas",
+		"source_updated_at":"2026-11-08 08:00"}],"final":true}`))
+	assert.Equal(t, SyncCounters{CustomersUpdated: 1}, res.Counters)
+	got = f.customerBySource(t, "cpf:12345678909")
+	assert.Equal(t, "Campinas", got.City)
+	assert.True(t, time.Date(2026, 11, 8, 11, 0, 0, 0, time.UTC).Equal(*got.SourceUpdatedAt))
+
+	// Sem source_updated_at no lote (ou inválido): segue a regra normal e aplica.
+	res = f.importBatch(t, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909","city":"Santos","source_updated_at":"x"}],"final":true}`))
+	assert.Equal(t, 1, res.Counters.CustomersUpdated)
+	assert.Equal(t, "Santos", f.customerBySource(t, "cpf:12345678909").City)
+
+	f.svc.store = &failingStore{OnMotorStore: f.repo, fail: "SaveCustomer"}
+	_, err := f.svc.ImportWithToken(f.token, decodeImport(t, `{"customers":[{"source_id":"cpf:12345678909",
+		"last_visit_at":"2026-12-01T10:00:00-03:00","source_updated_at":"2020-01-01"}]}`))
+	assert.ErrorIs(t, err, assert.AnError)
+}

@@ -18,6 +18,7 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Sincronização OnMotor (robô **lê** o OnMotor e envia para a API — mão única, nada é escrito lá; ou planilha pelo painel) | `POST /api/integrations/onmotor/import`, `/import/manual` |
 | Execução da sincronização (lotes, contadores e avisos sem dados pessoais; `running` → `success` / `partial` / `error`) | `SyncRun`, `GET /api/integrations/onmotor/runs` |
 | OS do OnMotor (histórico externo) | `ServiceRecord` |
+| Última vez na oficina / Data de edição (OnMotor) | `last_visit_at` / `source_updated_at` no cliente |
 | Token de integração (credencial do robô; só o dono cria/revoga; só o hash fica no banco; texto `rmx_...` aparece uma vez) | `IntegrationToken`, `/api/integrations/tokens` |
 | Origem do cadastro (`local` = criado aqui; `onmotor` = importado, `source_id` = id no OnMotor) | `source`, `source_id` |
 | Quilometragem (km rodados do veículo) | `mileage` (inteiro ou `null`) |

@@ -50,25 +50,27 @@ type ImportInput struct {
 }
 
 type ImportCustomer struct {
-	SourceID       FlexString `json:"source_id"`
-	Name           FlexString `json:"name"`
-	PersonType     FlexString `json:"person_type"`
-	CPF            FlexString `json:"cpf"`
-	CNPJ           FlexString `json:"cnpj"`
-	RG             FlexString `json:"rg"`
-	Phone          FlexString `json:"phone"`
-	Mobile         FlexString `json:"mobile"`
-	Email          FlexString `json:"email"`
-	EmailSecondary FlexString `json:"email_secondary"`
-	CEP            FlexString `json:"cep"`
-	Street         FlexString `json:"street"`
-	Number         FlexString `json:"number"`
-	Complement     FlexString `json:"complement"`
-	District       FlexString `json:"district"`
-	City           FlexString `json:"city"`
-	UF             FlexString `json:"uf"`
-	BirthDate      FlexString `json:"birth_date"`
-	Notes          FlexString `json:"notes"`
+	SourceID        FlexString `json:"source_id"`
+	Name            FlexString `json:"name"`
+	PersonType      FlexString `json:"person_type"`
+	CPF             FlexString `json:"cpf"`
+	CNPJ            FlexString `json:"cnpj"`
+	RG              FlexString `json:"rg"`
+	Phone           FlexString `json:"phone"`
+	Mobile          FlexString `json:"mobile"`
+	Email           FlexString `json:"email"`
+	EmailSecondary  FlexString `json:"email_secondary"`
+	CEP             FlexString `json:"cep"`
+	Street          FlexString `json:"street"`
+	Number          FlexString `json:"number"`
+	Complement      FlexString `json:"complement"`
+	District        FlexString `json:"district"`
+	City            FlexString `json:"city"`
+	UF              FlexString `json:"uf"`
+	BirthDate       FlexString `json:"birth_date"`
+	Notes           FlexString `json:"notes"`
+	LastVisitAt     FlexString `json:"last_visit_at"`
+	SourceUpdatedAt FlexString `json:"source_updated_at"`
 }
 
 type ImportVehicle struct {

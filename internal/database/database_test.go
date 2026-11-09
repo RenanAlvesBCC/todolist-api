@@ -161,6 +161,8 @@ func TestMigrate_CustomerTablesDefaultsAndUniqueness(t *testing.T) {
 	assert.Equal(t, "", loaded.CPF)
 	assert.Nil(t, loaded.BirthDate)
 	assert.Nil(t, loaded.SyncedAt)
+	assert.Nil(t, loaded.LastVisitAt, "sem última visita até a importação trazer")
+	assert.Nil(t, loaded.SourceUpdatedAt)
 
 	// Vários clientes sem source_id e sem CPF convivem; CPF repetido na oficina não.
 	require.NoError(t, db.Create(&models.Customer{WorkspaceID: 1, Name: "João"}).Error)
