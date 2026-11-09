@@ -53,3 +53,34 @@ func TestIntegrationRepository_Tokens(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, active)
 }
+
+func TestIntegrationRepository_Runs(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewIntegrationRepository(db)
+	base := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		require.NoError(t, repo.CreateRun(&models.SyncRun{WorkspaceID: 1, StartedAt: base.Add(time.Duration(i) * time.Hour), Warnings: models.StringList{}}))
+	}
+	foreign := &models.SyncRun{WorkspaceID: 2, StartedAt: base}
+	require.NoError(t, repo.CreateRun(foreign))
+
+	runs, err := repo.ListRuns(1, 2)
+	require.NoError(t, err)
+	require.Len(t, runs, 2)
+	assert.True(t, runs[0].StartedAt.After(runs[1].StartedAt), "mais recente primeiro")
+
+	run, err := repo.FindRun(1, runs[0].ID)
+	require.NoError(t, err)
+	run.Status = models.SyncStatusPartial
+	run.CustomersCreated = 5
+	run.Warnings = models.StringList{"CPF duplicado em 2 clientes (OnMotor 1, cliente OnMotor 2); mantido no primeiro"}
+	require.NoError(t, repo.SaveRun(run))
+	again, err := repo.FindRun(1, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.SyncStatusPartial, again.Status)
+	assert.Equal(t, 5, again.CustomersCreated)
+	assert.Equal(t, run.Warnings, again.Warnings)
+
+	_, err = repo.FindRun(1, foreign.ID)
+	assert.Error(t, err, "outra oficina")
+}

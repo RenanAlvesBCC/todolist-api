@@ -566,3 +566,74 @@ Content-Type: application/json
 ### Listar tokens (sem texto nem hash)
 GET {{baseUrl}}/api/integrations/tokens
 Authorization: Bearer {{loginOwner.response.body.token}}
+
+### ---- Sincronizacao OnMotor (so leitura no OnMotor; nada e escrito la) ----
+# O robo usa o token de integracao (rmx_...), nunca o JWT de usuario.
+@robotToken = {{createIntegrationToken.response.body.token}}
+
+### Robo: primeiro lote (sem run_id) cria a execucao
+# @name importBatch1
+POST {{baseUrl}}/api/integrations/onmotor/import
+Authorization: Bearer {{robotToken}}
+Content-Type: application/json
+
+{
+  "trigger": "schedule",
+  "customers": [
+    { "source_id": "4521", "name": "Maria Souza", "cpf": "123.456.789-09", "mobile": "(11) 98765-4321", "city": "Sao Paulo", "uf": "SP" }
+  ],
+  "vehicles": [
+    { "source_id": "889", "customer_source_id": "4521", "plate": "ABC-1D23", "manufacturer": "VW", "model": "Gol 1.6", "year_model": 2015 }
+  ],
+  "final": false
+}
+
+### Robo: ultimo lote (com run_id) fecha a execucao
+POST {{baseUrl}}/api/integrations/onmotor/import
+Authorization: Bearer {{robotToken}}
+Content-Type: application/json
+
+{
+  "run_id": {{importBatch1.response.body.run_id}},
+  "services": [
+    { "source_id": "5001", "customer_source_id": "4521", "vehicle_source_id": "889", "mileage": 85000,
+      "type": "Revisao", "status": "Entregue", "opened_at": "2026-03-10 09:30", "delivered_at": "2026-03-12 17:00",
+      "items": [ { "kind": "servico", "description": "Troca de oleo", "quantity": 1, "unit_price": 120, "total": 120 } ],
+      "total": "120,00" }
+  ],
+  "final": true
+}
+
+### JWT nao vale na importacao (401)
+POST {{baseUrl}}/api/integrations/onmotor/import
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{}
+
+### Robo: marcar execucao como erro
+POST {{baseUrl}}/api/integrations/onmotor/runs/{{importBatch1.response.body.run_id}}/fail
+Authorization: Bearer {{robotToken}}
+Content-Type: application/json
+
+{
+  "error": "OnMotor fora do ar"
+}
+
+### Painel: importar planilha (JSON montado no navegador; trigger = upload)
+POST {{baseUrl}}/api/integrations/onmotor/import/manual
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "customers": [ { "source_id": "4522", "name": "Joao Lima", "phone": "(11) 3333-4444" } ],
+  "final": true
+}
+
+### Painel: ultimas execucoes
+GET {{baseUrl}}/api/integrations/onmotor/runs?limit=10
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Revogar token de integracao
+DELETE {{baseUrl}}/api/integrations/tokens/{{createIntegrationToken.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}

@@ -48,3 +48,28 @@ func (r *IntegrationRepository) FindActiveTokenByHash(hash string) (*models.Inte
 func (r *IntegrationRepository) TouchTokenUsed(id uint, at time.Time) error {
 	return r.db.Model(&models.IntegrationToken{}).Where("id = ?", id).Update("last_used_at", at).Error
 }
+
+func (r *IntegrationRepository) CreateRun(run *models.SyncRun) error {
+	return r.db.Create(run).Error
+}
+
+func (r *IntegrationRepository) SaveRun(run *models.SyncRun) error {
+	return r.db.Save(run).Error
+}
+
+func (r *IntegrationRepository) FindRun(workspaceID, id uint) (*models.SyncRun, error) {
+	var run models.SyncRun
+	if err := r.db.Where("workspace_id = ?", workspaceID).First(&run, id).Error; err != nil {
+		return nil, err
+	}
+	return &run, nil
+}
+
+// ListRuns: execuções mais recentes primeiro.
+func (r *IntegrationRepository) ListRuns(workspaceID uint, limit int) ([]models.SyncRun, error) {
+	runs := []models.SyncRun{}
+	err := r.db.Where("workspace_id = ?", workspaceID).
+		Order("started_at desc").Order("id desc").
+		Limit(limit).Find(&runs).Error
+	return runs, err
+}

@@ -38,6 +38,34 @@ func (r *CustomerRepository) FindVehicleBySource(workspaceID uint, source, sourc
 	return firstOrNil[models.CustomerVehicle](r.db.Where("workspace_id = ? AND source = ? AND source_id = ?", workspaceID, source, sourceID))
 }
 
+// ClearVehiclePlate tira a placa de um veículo (a placa passou para outro cadastro).
+func (r *CustomerRepository) ClearVehiclePlate(id uint) error {
+	return r.db.Model(&models.CustomerVehicle{}).Where("id = ?", id).Update("plate", "").Error
+}
+
+// RaiseVehicleMileage só aumenta last_mileage (nunca diminui).
+func (r *CustomerRepository) RaiseVehicleMileage(id uint, km int) error {
+	return r.db.Model(&models.CustomerVehicle{}).
+		Where("id = ? AND (last_mileage IS NULL OR last_mileage < ?)", id, km).
+		Update("last_mileage", km).Error
+}
+
+func (r *CustomerRepository) CreateServiceRecord(sr *models.ServiceRecord) error {
+	return r.db.Create(sr).Error
+}
+
+func (r *CustomerRepository) SaveServiceRecord(sr *models.ServiceRecord) error {
+	return r.db.Save(sr).Error
+}
+
+func (r *CustomerRepository) TouchServiceRecordSynced(id uint, at time.Time) error {
+	return r.db.Model(&models.ServiceRecord{}).Where("id = ?", id).UpdateColumn("synced_at", at).Error
+}
+
+func (r *CustomerRepository) FindServiceRecordBySource(workspaceID uint, source, sourceID string) (*models.ServiceRecord, error) {
+	return firstOrNil[models.ServiceRecord](r.db.Where("workspace_id = ? AND source = ? AND source_id = ?", workspaceID, source, sourceID))
+}
+
 // ServiceRecordsByVehicle: OS importadas do veículo, mais recentes primeiro.
 func (r *CustomerRepository) ServiceRecordsByVehicle(workspaceID, vehicleID uint) ([]models.ServiceRecord, error) {
 	records := []models.ServiceRecord{}

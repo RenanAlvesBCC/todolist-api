@@ -14,6 +14,14 @@ func RateLimitGlobal() gin.HandlerFunc {
 	return ginlimiter.NewMiddleware(instance)
 }
 
+// RateLimitIntegration: lotes do robô de sincronização (por IP), além do limite global.
+func RateLimitIntegration() gin.HandlerFunc {
+	rate, _ := limiter.NewRateFromFormatted("30-M")
+	store := memory.NewStore()
+	instance := limiter.New(store, rate)
+	return ginlimiter.NewMiddleware(instance)
+}
+
 func RateLimitAuth() gin.HandlerFunc {
 	rate, _ := limiter.NewRateFromFormatted("10-M")
 	store := memory.NewStore()

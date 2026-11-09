@@ -483,6 +483,118 @@ O token tem o prefixo `rmx_` + 32 bytes aleatórios em base64url.
 ### DELETE /api/integrations/tokens/:id
 Revoga (204). Idempotente; token de outra oficina/inexistente → 404. Token revogado passa a receber 401 na importação.
 
+## Sincronização OnMotor
+
+O OnMotor (sistema de gestão da oficina) é a fonte dos clientes, veículos e OS antigas. A sincronização é **de mão única**: um robô **lê** do OnMotor e envia para esta API; **nada é escrito no OnMotor**. Também dá para importar manualmente uma planilha exportada do OnMotor pelo painel (a web converte a planilha em JSON no navegador e envia o mesmo formato).
+
+### POST /api/integrations/onmotor/import (robô)
+Autenticação: `Authorization: Bearer rmx_...` ([token de integração](#tokens-de-integração-só-owner)). **Não aceita JWT de usuário** (401) — e o token de integração não vale nas rotas de usuário (401). A oficina é a do token. Rate limit: 30 chamadas/min por IP (além do global de 60/min); em 429, aguarde e repita o lote (é idempotente).
+
+Body (todas as listas opcionais; até **1000 registros por lista** por chamada, senão 413; corpo até 20 MB):
+
+```json
+{
+  "run_id": null,
+  "trigger": "schedule",
+  "customers": [
+    { "source_id": "4521", "name": "Maria Souza", "person_type": "F", "cpf": "123.456.789-09", "cnpj": "", "rg": "12.345.678-9",
+      "phone": "(11) 3333-4444", "mobile": "(11) 98765-4321", "email": "maria@exemplo.com", "email_secondary": "",
+      "cep": "01310-100", "street": "Av. Paulista", "number": "1000", "complement": "", "district": "Bela Vista",
+      "city": "São Paulo", "uf": "SP", "birth_date": "03/05/1980", "notes": "" }
+  ],
+  "vehicles": [
+    { "source_id": "889", "customer_source_id": "4521", "plate": "ABC-1D23", "manufacturer": "VW", "model": "Gol 1.6",
+      "transmission": "Manual", "year_fab": 2014, "year_model": 2015, "fuel": "Flex", "engine": "1.6", "doors": 4,
+      "color": "Prata", "chassis": "9BWAB45U0FT000000", "renavam": "00000000000", "last_mileage": 80000 }
+  ],
+  "services": [
+    { "source_id": "5001", "customer_source_id": "4521", "vehicle_source_id": "889", "plate": "ABC1D23",
+      "mileage": 85000, "type": "Revisão", "status": "Entregue",
+      "opened_at": "2026-03-10 09:30", "diagnosed_at": null, "quoted_at": null, "started_at": null,
+      "tested_at": null, "finished_at": "2026-03-12 16:00", "notified_at": null, "delivered_at": "2026-03-12T17:00:00-03:00",
+      "notes": "",
+      "items": [ { "kind": "servico", "description": "Troca de óleo", "quantity": 1, "unit_price": 120, "total": 120 },
+                 { "kind": "peca", "description": "Filtro de óleo", "quantity": 1, "unit_price": 45.9, "total": 45.9 } ],
+      "total": "165,90" }
+  ],
+  "final": false
+}
+```
+
+Resposta 200:
+
+```json
+{
+  "run_id": 12,
+  "status": "running",
+  "counters": { "customers_created": 1, "customers_updated": 0, "vehicles_created": 1, "vehicles_updated": 0,
+                "services_created": 1, "services_updated": 0, "skipped": 0 },
+  "warnings": []
+}
+```
+
+**Lotes:** a primeira chamada vai **sem `run_id`** e cria uma execução (`sync_runs`) com status `running`; as seguintes mandam o `run_id` devolvido e os contadores/avisos se acumulam. A chamada com `"final": true` fecha a execução: `success` (sem avisos nem ignorados) ou `partial`. Lote com `run_id` de execução já fechada → 409 `sincronização já finalizada`; inexistente/de outra oficina → 404. Mande clientes antes dos veículos e veículos antes das OS (no mesmo lote a ordem já é essa).
+
+`trigger`: `schedule` (padrão) | `manual`; outro valor → 400 `trigger inválido`.
+
+**Campos:** mesmos nomes das tabelas (snake_case) + `source_id` (id no OnMotor, obrigatório), `customer_source_id`, `vehicle_source_id`. Aceita texto ou número em qualquer campo (CPF numérico, `"2015"`, `"80.000"`, `"165,90"`). Chave **ausente ou `null` mantém** o valor atual; presente (inclusive `""`) sobrescreve. Datas/horas: RFC3339 com fuso, ou sem fuso (`AAAA-MM-DD[ HH:MM[:SS]]`, `DD/MM/AAAA[ HH:MM[:SS]]`) interpretado no **horário de Brasília (UTC−3)**; respostas em UTC. `items`: array JSON livre (`kind` `servico`|`peca`, `description`, `quantity`, `unit_price`, `total`).
+
+**Regras de importação (upsert):**
+- Chave de cada entidade: (oficina, `source = onmotor`, `source_id`). Reenviar o mesmo dado não cria nem conta atualização (só renova `synced_at`); mudança real conta em `*_updated`.
+- **Nunca apaga** nada: o que sumir do OnMotor continua aqui.
+- **Merge com cadastros locais:** cliente importado sem correspondente por `source_id` mas com o **mesmo CPF** de um cliente local (sem `source_id`) vira esse cliente (`source` → `onmotor`); idem veículo local com a **mesma placa**.
+- **Campo inválido não derruba o lote:** o registro é gravado com o campo vazio/`null` e um aviso (CPF, CNPJ, telefone, celular, e-mail, CEP, UF, tipo de pessoa, data de nascimento, anos, portas, km, datas da OS, `items`, `total`).
+- **Ignorado (`skipped`)** só quando não dá para gravar: sem `source_id`, ou cliente novo sem `name`.
+- **CPF duplicado** entre clientes: fica com o primeiro que já o tem; o outro é gravado sem CPF + aviso.
+- **Placa duplicada** entre veículos: a última gravação vence; o veículo anterior fica sem placa + aviso.
+- Veículo → cliente por `customer_source_id`. OS → cliente por `customer_source_id` e → veículo por `vehicle_source_id` (sem ele ou não encontrado: pela placa); sem cliente, herda o dono do veículo. Referência não encontrada gera aviso e o vínculo fica vazio.
+- `customer_vehicles.last_mileage` só aumenta: recebe o km da OS (ou do veículo) quando maior que o atual.
+- **Avisos não têm dados pessoais**: só ids do OnMotor, ids locais (`local #7`), posições no lote e nomes de campo. Ex.: `"cliente OnMotor 4521: CPF inválido (campo ignorado)"`, `"CPF duplicado em 2 clientes (OnMotor 123, cliente OnMotor 456); mantido no primeiro"`, `"placa duplicada: veículo OnMotor 2 assumiu a placa do veículo local #7"`. Máximo de 200 avisos por execução (depois: `"demais avisos omitidos (limite de 200)"`).
+
+Erros: 400 `dados inválidos` (JSON malformado / lista não é array), 401 token ausente/inválido/revogado, 404/409 `run_id`, 413 `lote muito grande: máximo de 1000 registros por lista`. Em erro de banco no meio do lote (500), os contadores já processados ficam salvos e o lote pode ser reenviado.
+
+### POST /api/integrations/onmotor/runs/:id/fail (robô)
+Mesmo token. Body `{ "error": "OnMotor fora do ar" }` (até 500 caracteres; vazio vira `falha informada pelo robô`; **não inclua dados pessoais**). Marca a execução como `error` e fecha. 200 com a execução; 404 inexistente/outra oficina; 409 já finalizada.
+
+### POST /api/integrations/onmotor/import/manual (painel)
+JWT de dono/gerente (mecânico → 403). Mesmo body e mesma resposta do robô (inclusive lotes com `run_id`); `trigger` é sempre `upload`.
+
+### GET /api/integrations/onmotor/runs?limit=10 (painel)
+JWT de dono/gerente. Execuções mais recentes primeiro (`limit` padrão 10, máx. 50):
+
+```json
+{
+  "runs": [
+    { "id": 12, "workspace_id": 1, "source": "onmotor", "started_at": "2026-11-09T06:00:00Z", "finished_at": "2026-11-09T06:03:10Z",
+      "status": "partial", "trigger": "schedule",
+      "customers_created": 3, "customers_updated": 40, "vehicles_created": 5, "vehicles_updated": 12,
+      "services_created": 30, "services_updated": 2, "skipped": 1,
+      "warnings": ["cliente na posição 17 sem source_id (ignorado)"], "error": "" }
+  ]
+}
+```
+
+## LGPD — dados pessoais de clientes
+
+- CPF/CNPJ/RG, telefones, e-mails, endereço e data de nascimento só saem em `/api/customers*` e `/api/customer-vehicles*`, exclusivos de dono/gerente.
+- O mecânico continua recebendo só o que já recebia no veículo da esteira (nome do cliente em `customer`) mais os ids `customer_id` / `customer_vehicle_id`; nunca `customer_cpf`/`customer_cep`/`customer_whatsapp` nem dados do cadastro.
+- Avisos e erros de sincronização (`sync_runs`) não guardam dados pessoais.
+- Tokens de integração são guardados só como hash SHA-256.
+
+## Matriz de permissões — clientes e integração
+
+| Ação | owner (Dono) | manager (Gerente) | editor (Mecânico) |
+| --- | --- | --- | --- |
+| `GET/POST /api/customers`, `GET/PUT /api/customers/:id` | sim | sim | 403 |
+| `GET/POST /api/customers/:id/vehicles`, `PUT /api/customer-vehicles/:id` | sim | sim | 403 |
+| `GET /api/customer-vehicles/lookup`, `GET /api/customer-vehicles/:id/history` | sim | sim | 403 |
+| `customer_id` / `customer_vehicle_id` no `POST/PUT /api/lists` | sim | sim | 403 (já não edita a ficha) |
+| `GET/POST/DELETE /api/integrations/tokens` | sim | 403 | 403 |
+| `POST /api/integrations/onmotor/import/manual`, `GET /api/integrations/onmotor/runs` | sim | sim | 403 |
+| `POST /api/integrations/onmotor/import`, `POST .../runs/:id/fail` | só com token de integração (JWT → 401) | — | — |
+
+Cadastro, veículo, token ou execução de outra oficina → 404. Usuário sem oficina → 404 `oficina não encontrada`.
+
 ## Auditoria (owner/manager)
 
 ### GET /api/audit
@@ -568,6 +680,7 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 
 - 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `quilometragem inválida`, `nome é obrigatório`, `CNPJ inválido`, ...)
 - 409 cadastro duplicado na oficina: `{ "error": "...", "existing_id": 12 }` (CPF de cliente, placa de veículo do cliente)
-- 401 token ausente, inválido ou na blacklist
+- 401 token ausente, inválido ou na blacklist (JWT); token de integração ausente, inválido ou revogado (importação OnMotor)
+- 413 lote de importação acima de 1000 registros por lista ou 20 MB
 - 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)

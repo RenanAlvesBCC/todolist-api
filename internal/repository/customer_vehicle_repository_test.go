@@ -82,3 +82,42 @@ func TestCustomerRepository_HistorySources(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, other)
 }
+
+func TestCustomerRepository_ImportHelpers(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewCustomerRepository(db)
+	v := &models.CustomerVehicle{WorkspaceID: 1, Plate: "ABC1D23"}
+	require.NoError(t, repo.CreateVehicle(v))
+
+	require.NoError(t, repo.RaiseVehicleMileage(v.ID, 80000))
+	require.NoError(t, repo.RaiseVehicleMileage(v.ID, 70000))
+	got, _ := repo.FindVehicle(1, v.ID)
+	assert.Equal(t, 80000, *got.LastMileage, "nunca diminui")
+	require.NoError(t, repo.RaiseVehicleMileage(v.ID, 90000))
+	got, _ = repo.FindVehicle(1, v.ID)
+	assert.Equal(t, 90000, *got.LastMileage)
+
+	require.NoError(t, repo.ClearVehiclePlate(v.ID))
+	got, _ = repo.FindVehicle(1, v.ID)
+	assert.Equal(t, "", got.Plate)
+
+	sr := &models.ServiceRecord{WorkspaceID: 1, Source: models.SourceOnMotor, SourceID: "os-1", Items: "[]"}
+	require.NoError(t, repo.CreateServiceRecord(sr))
+	found, err := repo.FindServiceRecordBySource(1, models.SourceOnMotor, "os-1")
+	require.NoError(t, err)
+	assert.Equal(t, sr.ID, found.ID)
+	missing, err := repo.FindServiceRecordBySource(2, models.SourceOnMotor, "os-1")
+	require.NoError(t, err)
+	assert.Nil(t, missing)
+
+	sr.Status = "Entregue"
+	require.NoError(t, repo.SaveServiceRecord(sr))
+	old := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, db.Model(sr).UpdateColumn("updated_at", old).Error)
+	at := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, repo.TouchServiceRecordSynced(sr.ID, at))
+	found, _ = repo.FindServiceRecordBySource(1, models.SourceOnMotor, "os-1")
+	assert.Equal(t, "Entregue", found.Status)
+	assert.True(t, at.Equal(*found.SyncedAt))
+	assert.True(t, old.Equal(found.UpdatedAt))
+}

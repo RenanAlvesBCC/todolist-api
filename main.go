@@ -53,6 +53,7 @@ func main() {
 	noteService := services.NewVehicleNoteService(noteRepo, listRepo, wsRepo)
 	customerService := services.NewCustomerService(customerRepo, wsRepo)
 	tokenService := services.NewIntegrationTokenService(integrationRepo, wsRepo)
+	syncService := services.NewOnMotorSyncService(customerRepo, integrationRepo, wsRepo)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService, secRepo)
@@ -66,9 +67,10 @@ func main() {
 	customerHandler := handlers.NewCustomerHandler(customerService)
 	customerVehicleHandler := handlers.NewCustomerVehicleHandler(customerService)
 	tokenHandler := handlers.NewIntegrationTokenHandler(tokenService)
+	syncHandler := handlers.NewOnMotorSyncHandler(syncService, tokenService)
 
 	router := gin.Default()
-	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, noteHandler, customerHandler, customerVehicleHandler, tokenHandler, secRepo)
+	routes.SetupRoutes(router, authHandler, listHandler, wsHandler, quoteHandler, flagHandler, assignmentHandler, auditHandler, noteHandler, customerHandler, customerVehicleHandler, tokenHandler, syncHandler, secRepo)
 
 	port := os.Getenv("PORT")
 	if port == "" {

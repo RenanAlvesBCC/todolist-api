@@ -21,6 +21,7 @@ func SetupRoutes(
 	customerHandler *handlers.CustomerHandler,
 	customerVehicleHandler *handlers.CustomerVehicleHandler,
 	tokenHandler *handlers.IntegrationTokenHandler,
+	syncHandler *handlers.OnMotorSyncHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.CORS())
@@ -37,6 +38,15 @@ func SetupRoutes(
 
 	// Convite pode ser previsualizando sem autenticação
 	router.GET("/invites/:code/preview", workspaceHandler.InvitePreview)
+
+	// Robô de sincronização OnMotor: token de integração (rmx_...), nunca o JWT de usuário.
+	integration := router.Group("/api/integrations/onmotor")
+	integration.Use(middleware.RateLimitIntegration())
+	integration.Use(syncHandler.RequireIntegrationToken())
+	{
+		integration.POST("/import", syncHandler.Import)
+		integration.POST("/runs/:id/fail", syncHandler.FailRun)
+	}
 
 	protected := router.Group("/api")
 	protected.Use(middleware.AuthRequired())
@@ -106,5 +116,9 @@ func SetupRoutes(
 		protected.GET("/integrations/tokens", tokenHandler.List)
 		protected.POST("/integrations/tokens", tokenHandler.Create)
 		protected.DELETE("/integrations/tokens/:id", tokenHandler.Revoke)
+
+		// Sincronização OnMotor pelo painel (dono/gerente): planilha e status
+		protected.POST("/integrations/onmotor/import/manual", syncHandler.ImportManual)
+		protected.GET("/integrations/onmotor/runs", syncHandler.ListRuns)
 	}
 }
