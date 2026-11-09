@@ -104,6 +104,14 @@ const robotBatch = `{
   "final": true
 }`
 
+func TestRoutes_RootAnswersGetAndHead(t *testing.T) {
+	router, _ := newApp(t)
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		code, _, _ := call(t, router, method, "/", "", "")
+		assert.Equal(t, http.StatusOK, code, method)
+	}
+}
+
 func TestRoutes_CustomerBaseEndToEnd(t *testing.T) {
 	router, db := newApp(t)
 	require.NoError(t, db.Create(&models.Workspace{Base: models.Base{ID: 1}, Name: "RMAXX", OwnerID: 1}).Error)

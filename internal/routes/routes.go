@@ -28,6 +28,8 @@ func SetupRoutes(
 	router.Use(middleware.SecurityHeaders())
 	router.Use(middleware.RateLimitGlobal())
 	router.GET("/", handlers.HomeHandler)
+	// O Render sonda a raiz com HEAD ao subir o deploy.
+	router.HEAD("/", handlers.HomeHandler)
 
 	auth := router.Group("/")
 	auth.Use(middleware.RateLimitAuth())
