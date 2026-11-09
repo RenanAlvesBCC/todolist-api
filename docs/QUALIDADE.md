@@ -16,6 +16,8 @@ Medição: `go test` com `-coverprofile` nos três pacotes acima; total agregado
 ./scripts/verify.sh
 ```
 
+Além do gate de cobertura, o script roda o teste ponta a ponta de `internal/routes` (API montada como no `main.go`, sobre SQLite), fora do cálculo de cobertura.
+
 Equivalente manual:
 
 ```bash

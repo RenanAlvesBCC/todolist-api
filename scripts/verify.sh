@@ -22,6 +22,9 @@ go test "${PACKAGES[@]}" -coverprofile="$COVER_FILE" -covermode=atomic
 TOTAL_LINE="$(go tool cover -func="$COVER_FILE" | awk '/^total:/ {print $3}' | tr -d '%')"
 rm -f "$COVER_FILE"
 
+echo "▶ go test (ponta a ponta das rotas, fora da cobertura)"
+go test ./internal/routes/...
+
 echo "▶ cobertura agregada: ${TOTAL_LINE}% (mínimo ${THRESHOLD}%)"
 
 awk -v total="$TOTAL_LINE" -v min="$THRESHOLD" 'BEGIN {
