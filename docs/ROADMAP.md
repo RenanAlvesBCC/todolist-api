@@ -15,8 +15,12 @@ Visão compartilhada dos quatro repositórios.
 - [x] Android no GitHub como `oficina-mecanico-android`
 - [x] CI `verify.sh` nos quatro repos
 - [x] Polish qualidade (cobertura ≥ 90% no escopo) + paridade UX desteira
+- [x] API — base de clientes, veículos do cliente, histórico de OS, vínculo do atendimento (`customer_id` / `customer_vehicle_id`), tokens de integração e importação OnMotor (mão única)
 
 ## Backlog
+
+- Web do gerente: telas de clientes, veículos do cliente, histórico, reconhecimento por placa ao criar atendimento, tokens de integração, upload de planilha OnMotor e status das sincronizações
+- Robô de sincronização OnMotor (só leitura no OnMotor) usando `POST /api/integrations/onmotor/import`
 
 - Renomear HTTP `/api/lists` → `/api/vehicles` nos quatro repos no mesmo PR
 - Renomear structs Go `TaskList` / `TaskItem` (tabelas podem usar `TableName()`)
