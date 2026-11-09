@@ -538,3 +538,15 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 ### Historico do carro (OnMotor + atendimentos)
 GET {{baseUrl}}/api/customer-vehicles/{{createCustomerVehicle.response.body.id}}/history
 Authorization: Bearer {{loginOwner.response.body.token}}
+
+### ---- Atendimento vinculado ao cadastro de clientes ----
+
+### Criar atendimento a partir do veiculo do cliente (placa, titulo, nome e dados do cliente preenchidos)
+POST {{baseUrl}}/api/lists
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "customer_vehicle_id": {{createCustomerVehicle.response.body.id}},
+  "mileage": 91000
+}

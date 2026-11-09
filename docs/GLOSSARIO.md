@@ -9,6 +9,7 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Gerente | `manager` |
 | Mecânico | `editor` |
 | Veículo / carro na esteira | `TaskList`, `/api/lists` |
+| Atendimento (uma passagem do carro pela oficina; hoje cada veículo em `/api/lists` é um atendimento, vinculável ao cadastro por `customer_id` / `customer_vehicle_id`) | `TaskList`, `/api/lists` |
 | Placa | `plate` |
 | Nome do cliente no atendimento (texto livre) | `customer` |
 | Cliente (cadastro permanente da oficina, com documentos e contatos — LGPD; só dono/gerente) | `Customer`, `/api/customers` |

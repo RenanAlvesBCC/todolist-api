@@ -46,7 +46,8 @@ func getUserID(c *gin.Context) uint {
 
 // Ponteiros distinguem chave ausente (nil: no PUT mantém o valor) de chave enviada, mesmo "".
 type listInput struct {
-	Title            string  `json:"title" binding:"required"`
+	// Obrigatório, exceto quando customer_vehicle_id permite preencher (validado no service).
+	Title            string  `json:"title"`
 	Plate            string  `json:"plate"`
 	Customer         string  `json:"customer"`
 	CustomerCPF      *string `json:"customer_cpf"`
@@ -54,23 +55,30 @@ type listInput struct {
 	CustomerWhatsApp *string `json:"customer_whatsapp"`
 	Priority         *string `json:"priority"`
 	// Cru para responder "quilometragem inválida" (e não erro de bind) a string, decimal etc.
-	Mileage json.RawMessage `json:"mileage"`
+	Mileage           json.RawMessage `json:"mileage"`
+	CustomerID        *uint           `json:"customer_id"`
+	CustomerVehicleID *uint           `json:"customer_vehicle_id"`
 }
 
 func (in listInput) toVehicleInput() (services.VehicleInput, error) {
+	if in.Title == "" && (in.CustomerVehicleID == nil || *in.CustomerVehicleID == 0) {
+		return services.VehicleInput{}, services.ErrTitleRequired
+	}
 	mileage, err := parseMileage(in.Mileage)
 	if err != nil {
 		return services.VehicleInput{}, err
 	}
 	return services.VehicleInput{
-		Title:            in.Title,
-		Plate:            in.Plate,
-		Customer:         in.Customer,
-		CustomerCPF:      in.CustomerCPF,
-		CustomerCEP:      in.CustomerCEP,
-		CustomerWhatsApp: in.CustomerWhatsApp,
-		Priority:         in.Priority,
-		Mileage:          mileage,
+		Title:             in.Title,
+		Plate:             in.Plate,
+		Customer:          in.Customer,
+		CustomerCPF:       in.CustomerCPF,
+		CustomerCEP:       in.CustomerCEP,
+		CustomerWhatsApp:  in.CustomerWhatsApp,
+		Priority:          in.Priority,
+		Mileage:           mileage,
+		CustomerID:        in.CustomerID,
+		CustomerVehicleID: in.CustomerVehicleID,
 	}, nil
 }
 
@@ -94,6 +102,9 @@ func isVehicleValidationError(err error) bool {
 		services.ErrInvalidCPF,
 		services.ErrInvalidCEP,
 		services.ErrInvalidWhatsApp,
+		services.ErrInvalidCustomer,
+		services.ErrInvalidCustomerVehicle,
+		services.ErrVehicleCustomerMismatch,
 	} {
 		if errors.Is(err, target) {
 			return true

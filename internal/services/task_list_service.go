@@ -43,6 +43,7 @@ type TaskListService struct {
 	listRepo TaskListStore
 	itemRepo TaskItemStore
 	wsStore  WorkspaceContextStore
+	links    CustomerLinkStore
 }
 
 func NewTaskListService(listRepo TaskListStore, itemRepo TaskItemStore, wsStore WorkspaceContextStore) *TaskListService {
@@ -108,6 +109,9 @@ type VehicleInput struct {
 	CustomerWhatsApp *string
 	Priority         *string
 	Mileage          *int
+	// Vínculo com o cadastro de clientes (0 desvincula).
+	CustomerID        *uint
+	CustomerVehicleID *uint
 }
 
 func parsePriority(value string) (models.VehiclePriority, error) {
@@ -205,8 +209,13 @@ func (s *TaskListService) revealCustomerData(list *models.TaskList, userID uint)
 	return list
 }
 
+// titleMissing: sem título só vale quando o veículo do cliente pode preenchê-lo.
+func titleMissing(in VehicleInput) bool {
+	return in.Title == "" && (in.CustomerVehicleID == nil || *in.CustomerVehicleID == 0)
+}
+
 func (s *TaskListService) CreateList(userID uint, in VehicleInput) (*models.TaskList, error) {
-	if in.Title == "" {
+	if titleMissing(in) {
 		return nil, ErrTitleRequired
 	}
 	if err := s.requireManager(userID); err != nil {
@@ -214,20 +223,26 @@ func (s *TaskListService) CreateList(userID uint, in VehicleInput) (*models.Task
 	}
 
 	list := &models.TaskList{
-		Title:    in.Title,
-		Plate:    normalizePlate(in.Plate),
-		Customer: normalizeCustomer(in.Customer),
-		UserID:   userID,
-		Status:   models.StatusAguardandoBox,
-		Priority: models.PriorityNormal,
-		Items:    []models.TaskItem{},
-		Notes:    []models.VehicleNote{},
+		Title:       in.Title,
+		Plate:       normalizePlate(in.Plate),
+		Customer:    normalizeCustomer(in.Customer),
+		UserID:      userID,
+		WorkspaceID: s.workspaceID(userID),
+		Status:      models.StatusAguardandoBox,
+		Priority:    models.PriorityNormal,
+		Items:       []models.TaskItem{},
+		Notes:       []models.VehicleNote{},
 	}
 	if err := applyOptionalFields(list, in); err != nil {
 		return nil, err
 	}
+	if err := s.applyCustomerLinks(list, in); err != nil {
+		return nil, err
+	}
+	if list.Title == "" {
+		return nil, ErrTitleRequired
+	}
 
-	list.WorkspaceID = s.workspaceID(userID)
 	position, err := s.listRepo.NextPosition(userID, list.WorkspaceID)
 	if err != nil {
 		return nil, err
@@ -322,8 +337,9 @@ func (s *TaskListService) GetList(listID, userID uint) (*models.TaskList, error)
 }
 
 // UpdateList substitui title, plate e customer; os demais campos só mudam se vierem no input.
+// Com customer_id / customer_vehicle_id no input, o que ficar vazio é preenchido pelo cadastro.
 func (s *TaskListService) UpdateList(listID, userID uint, in VehicleInput) (*models.TaskList, error) {
-	if in.Title == "" {
+	if titleMissing(in) {
 		return nil, ErrTitleRequired
 	}
 	if err := s.requireManager(userID); err != nil {
@@ -341,6 +357,12 @@ func (s *TaskListService) UpdateList(listID, userID uint, in VehicleInput) (*mod
 	list.Title = in.Title
 	list.Plate = normalizePlate(in.Plate)
 	list.Customer = normalizeCustomer(in.Customer)
+	if err := s.applyCustomerLinks(list, in); err != nil {
+		return nil, err
+	}
+	if list.Title == "" {
+		return nil, ErrTitleRequired
+	}
 	if err := s.listRepo.Update(list); err != nil {
 		return nil, err
 	}

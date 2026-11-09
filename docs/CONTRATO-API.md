@@ -128,11 +128,13 @@ Cria veículo. Só `owner`/`manager`. Body:
   "customer_cep": "01310-100",
   "customer_whatsapp": "+55 (11) 98765-4321",
   "priority": "alta",
-  "mileage": 87500
+  "mileage": 87500,
+  "customer_id": 12,
+  "customer_vehicle_id": 30
 }
 ```
 
-Só `title` é obrigatório; os demais têm default `""` (`priority`: default `normal`; valor fora do enum → 400 `prioridade inválida`; `mileage`: default `null`, regras em [Quilometragem](#quilometragem)). Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
+Só `title` é obrigatório (exceto com `customer_vehicle_id`, ver [Vínculo com o cadastro de clientes](#vínculo-com-o-cadastro-de-clientes)); os demais têm default `""` (`priority`: default `normal`; valor fora do enum → 400 `prioridade inválida`; `mileage`: default `null`, regras em [Quilometragem](#quilometragem)). Placa é normalizada (trim + maiúsculas), sem validação de formato. CPF/CEP/WhatsApp seguem as regras de [Dados do cliente](#dados-do-cliente-lgpd). 201 com o veículo (visão de dono/gerente). 400 em dado inválido.
 
 ### GET /api/lists/:id
 Detalhe. Mecânico só se atribuído ou membro com acesso ao veículo da esteira.
@@ -144,8 +146,25 @@ Ficha do veículo. Só `owner`/`manager`; mecânico só lê (403).
 - `customer_cpf`, `customer_cep`, `customer_whatsapp` são opcionais: **chave ausente (ou `null`) mantém o valor atual**; chave presente grava, e `""` limpa.
 - `priority` também é opcional: ausente (ou `null`) mantém; presente precisa ser um valor válido do enum.
 - `mileage` também é opcional: ausente (ou `null`) mantém; número inteiro válido grava (inclusive `0`). **Não há como voltar para `null` pelo PUT** — só sobrescrever com outro valor.
-- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp, a prioridade nem a quilometragem.
+- `customer_id` e `customer_vehicle_id` também são opcionais: ausente (ou `null`) mantém o vínculo; ver [Vínculo com o cadastro de clientes](#vínculo-com-o-cadastro-de-clientes).
+- Um PUT só com `title`/`plate`/`customer` (como o app envia) não apaga CPF/CEP/WhatsApp, a prioridade, a quilometragem nem os vínculos com cliente.
 - 200 com o veículo atualizado. 400 em dado inválido (`CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `prioridade inválida`, `quilometragem inválida`); nada é gravado se algum campo for inválido.
+
+### Vínculo com o cadastro de clientes
+
+Um veículo em `/api/lists` é, na prática, um **atendimento** (uma passagem pela oficina). Ele pode apontar para o [cliente](#clientes-apicustomers--só-ownermanager) e para o [veículo do cliente](#veículos-do-cliente):
+
+- `customer_id` / `customer_vehicle_id`: inteiros ou `null`. Aparecem para **todos os papéis** (são só ids, não dados pessoais); o mecânico não tem acesso aos endpoints de clientes.
+- Aceitos no `POST /api/lists` e no `PUT /api/lists/:id` (só dono/gerente). Ausente ou `null` = não muda (no POST fica `null`). `0` desvincula.
+- Precisam ser da **mesma oficina** do atendimento: senão 400 `{ "error": "cliente inválido" }` / `{ "error": "veículo do cliente inválido" }`. Enviando os dois, o veículo precisa ser do cliente: senão 400 `{ "error": "veículo não pertence ao cliente" }`. Nada é gravado em caso de erro.
+- Com `customer_vehicle_id` e sem `customer_id`, o atendimento é vinculado ao dono do veículo (se houver).
+- Preenchimento automático (POST e PUT, só quando o id vem no body e o campo ficou vazio): `plate` ← placa do veículo do cliente; `title` ← `fabricante modelo` do veículo do cliente; `customer` ← nome do cliente; `customer_cpf` / `customer_cep` / `customer_whatsapp` ← `cpf` / `cep` / `mobile` do cliente. O que foi digitado nunca é sobrescrito.
+- `title` continua obrigatório **depois** do preenchimento: sem título e sem `customer_vehicle_id` → 400 `título é obrigatório`; com veículo sem fabricante/modelo também.
+
+```json
+{ "customer_vehicle_id": 30 }
+```
+→ cria `{ "title": "VW Gol 1.6", "plate": "ABC1D23", "customer": "Maria Souza", "customer_id": 12, "customer_vehicle_id": 30, ... }`.
 
 ### Quilometragem
 
@@ -473,11 +492,13 @@ Categorias: `acesso`, `veiculo`, `servico`, `financeiro`, `membros`.
 
 ## Objeto veículo (TaskList)
 
-Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `user_id`, `workspace_id`, `status`, `priority`, `mileage`, `position`, `delivered_at`, `checkup_video_done_at`, `checkup_video_done_by`, `checkup_video_done_by_name`, `items[]`, `assignments[]`, `notes[]`.
+Campos relevantes: `id`, `created_at`, `updated_at`, `title`, `plate`, `customer`, `customer_cpf`\*, `customer_cep`\*, `customer_whatsapp`\*, `customer_id`, `customer_vehicle_id`, `user_id`, `workspace_id`, `status`, `priority`, `mileage`, `position`, `delivered_at`, `checkup_video_done_at`, `checkup_video_done_by`, `checkup_video_done_by_name`, `items[]`, `assignments[]`, `notes[]`.
 
 \* Só para `owner`/`manager` (ver [Dados do cliente](#dados-do-cliente-lgpd)); ausentes para o mecânico. Veículos antigos recebem `""` na migração.
 
 `priority`: `normal` | `alta` | `urgente`; veículos antigos recebem `normal` na migração.
+
+`customer_id` / `customer_vehicle_id`: id ou `null`; sempre presentes, visíveis para todos os papéis. Veículos antigos ficam `null`.
 
 `mileage`: km (inteiro) ou `null`; sempre presente e visível para todos os papéis. Veículos antigos ficam `null` na migração (coluna nova, nullable). Ver [Quilometragem](#quilometragem).
 
@@ -509,6 +530,7 @@ Mecânico atribuído (mesmo veículo): idêntico, **sem** `customer_cpf`, `custo
 | `PUT /:id/checkup-video` | sim | sim | só atribuídos (outros → 404) |
 | `PUT /:id/status` | sim | sim | só atribuídos |
 | `PUT /api/lists/reorder`, `DELETE /:id` | sim | sim | 403 |
+| Ver `customer_id` / `customer_vehicle_id` | sim | sim | sim (só ids) |
 
 Veículo de outra oficina → 404 para todos.
 

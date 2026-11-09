@@ -43,7 +43,7 @@ func main() {
 
 	// Services
 	authService := services.NewAuthService(userRepo)
-	listService := services.NewTaskListService(listRepo, itemRepo, wsRepo)
+	listService := services.NewTaskListService(listRepo, itemRepo, wsRepo).WithCustomerLinks(customerRepo)
 	wsService := services.NewWorkspaceService(wsRepo)
 	quoteService := services.NewQuoteService(quoteRepo, listRepo, wsRepo)
 	flagService := services.NewPendingFlagService(flagRepo, listRepo, wsRepo)

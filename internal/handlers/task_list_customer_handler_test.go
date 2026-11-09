@@ -144,3 +144,58 @@ func TestTaskListHandler_InvalidCustomerDataReturns400(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskListHandler_ForwardsCustomerLinks(t *testing.T) {
+	var created, updated services.VehicleInput
+	router := setupRouter(&mockTaskListProvider{
+		createListFunc: func(userID uint, in services.VehicleInput) (*models.TaskList, error) {
+			created = in
+			return &models.TaskList{Title: "VW Gol", CustomerID: in.CustomerID, CustomerVehicleID: in.CustomerVehicleID}, nil
+		},
+		updateListFunc: func(listID, userID uint, in services.VehicleInput) (*models.TaskList, error) {
+			updated = in
+			return &models.TaskList{Title: in.Title}, nil
+		},
+	})
+
+	// Sem título, mas com veículo do cliente: o service preenche.
+	rec := rawRequest(router, http.MethodPost, "/api/lists", `{"customer_id":4,"customer_vehicle_id":9}`)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	require.NotNil(t, created.CustomerID)
+	assert.Equal(t, uint(4), *created.CustomerID)
+	assert.Equal(t, uint(9), *created.CustomerVehicleID)
+	body := decodeObject(t, rec)
+	assert.Equal(t, float64(4), body["customer_id"])
+	assert.Equal(t, float64(9), body["customer_vehicle_id"])
+
+	rec = rawRequest(router, http.MethodPut, "/api/lists/3", `{"title":"Gol","customer_id":null}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Nil(t, updated.CustomerID, "null = ausente: mantém")
+	assert.Nil(t, updated.CustomerVehicleID)
+
+	for _, body := range []string{`{}`, `{"customer_id":4}`, `{"customer_vehicle_id":0}`} {
+		rec = rawRequest(router, http.MethodPost, "/api/lists", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, body)
+		assert.Equal(t, "título é obrigatório", decodeObject(t, rec)["error"])
+	}
+	rec = rawRequest(router, http.MethodPost, "/api/lists", `{"title":"Gol","customer_id":"4"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	rec = rawRequest(router, http.MethodPut, "/api/lists/3", `{"title":"Gol","customer_vehicle_id":-1}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestTaskListHandler_InvalidCustomerLinksReturn400(t *testing.T) {
+	for _, svcErr := range []error{services.ErrInvalidCustomer, services.ErrInvalidCustomerVehicle, services.ErrVehicleCustomerMismatch} {
+		router := setupRouter(&mockTaskListProvider{
+			createListFunc: func(userID uint, in services.VehicleInput) (*models.TaskList, error) { return nil, svcErr },
+			updateListFunc: func(listID, userID uint, in services.VehicleInput) (*models.TaskList, error) { return nil, svcErr },
+		})
+		for _, rec := range []*httptest.ResponseRecorder{
+			rawRequest(router, http.MethodPost, "/api/lists", `{"title":"Gol","customer_id":4}`),
+			rawRequest(router, http.MethodPut, "/api/lists/3", `{"title":"Gol","customer_id":4}`),
+		} {
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, svcErr.Error(), decodeObject(t, rec)["error"])
+		}
+	}
+}
