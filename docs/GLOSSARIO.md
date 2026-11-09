@@ -10,7 +10,9 @@ Termos de negócio vs nomes técnicos atuais (legado to-do). A UI e a documenta�
 | Mecânico | `editor` |
 | Veículo / carro na esteira | `TaskList`, `/api/lists` |
 | Placa | `plate` |
-| Cliente | `customer` |
+| Nome do cliente no atendimento (texto livre) | `customer` |
+| Cliente (cadastro permanente da oficina, com documentos e contatos — LGPD; só dono/gerente) | `Customer`, `/api/customers` |
+| Origem do cadastro (`local` = criado aqui; `onmotor` = importado, `source_id` = id no OnMotor) | `source`, `source_id` |
 | Quilometragem (km rodados do veículo) | `mileage` (inteiro ou `null`) |
 | Dados do cliente (CPF, CEP, WhatsApp — LGPD; só dono/gerente veem) | `customer_cpf`, `customer_cep`, `customer_whatsapp` (só dígitos) |
 | Serviço (item de trabalho) | `TaskItem`, `/api/lists/:id/items` |

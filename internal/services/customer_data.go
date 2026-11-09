@@ -71,9 +71,13 @@ func normalizeCEP(value string) (string, error) {
 // normalizeWhatsApp aceita vazio ou telefone brasileiro (DDD + número, 10 ou 11 dígitos),
 // com máscara, espaços e prefixo +55/55 opcional. Devolve só DDD + número.
 func normalizeWhatsApp(value string) (string, error) {
+	return normalizeBRPhone(value, ErrInvalidWhatsApp)
+}
+
+func normalizeBRPhone(value string, invalid error) (string, error) {
 	digits, ok := onlyDigits(value, "+()-. ")
 	if !ok {
-		return "", ErrInvalidWhatsApp
+		return "", invalid
 	}
 	if digits == "" {
 		return "", nil
@@ -82,7 +86,7 @@ func normalizeWhatsApp(value string) (string, error) {
 		digits = rest
 	}
 	if (len(digits) != 10 && len(digits) != 11) || digits[0] == '0' {
-		return "", ErrInvalidWhatsApp
+		return "", invalid
 	}
 	return digits, nil
 }

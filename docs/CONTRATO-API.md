@@ -303,6 +303,82 @@ Exclusão **lógica**: some das respostas, mas a linha fica no banco com `delete
 - 403 `{ "error": "apenas gerentes ou o autor podem excluir esta informação" }`
 - 404 `{ "error": "informação não encontrada" }` (já excluída, inexistente ou de outro veículo)
 
+## Clientes (`/api/customers`) — só owner/manager
+
+Cadastro permanente de clientes da oficina, alimentado pela importação do OnMotor (somente leitura lá; ver [Sincronização OnMotor](#sincronização-onmotor)) e por cadastros locais. **LGPD:** CPF/CNPJ/RG, telefones, e-mails, endereço e data de nascimento só trafegam nestes endpoints, que são exclusivos de `owner`/`manager`. Mecânico (`editor`) → 403 em todos; usuário sem oficina → 404; cliente de outra oficina → 404.
+
+Documentos, telefones e CEP são gravados **só com dígitos** (a entrada aceita máscara). `source`: `local` (criado aqui) | `onmotor` (importado; `source_id` = id no OnMotor).
+
+### Objeto cliente
+
+```json
+{
+  "id": 12, "workspace_id": 1, "source": "onmotor", "source_id": "4521",
+  "name": "Maria Souza", "person_type": "pf",
+  "cpf": "12345678909", "cnpj": "", "rg": "12.345.678-9",
+  "phone": "1133334444", "mobile": "11987654321",
+  "email": "maria@exemplo.com", "email_secondary": "",
+  "cep": "01310100", "street": "Av. Paulista", "number": "1000", "complement": "ap 1",
+  "district": "Bela Vista", "city": "São Paulo", "uf": "SP",
+  "birth_date": "1980-05-03", "notes": "",
+  "created_at": "2026-11-09T19:00:00Z", "updated_at": "2026-11-09T19:00:00Z", "synced_at": "2026-11-09T19:00:00Z",
+  "vehicles": [ /* ver abaixo */ ],
+  "last_service_at": "2026-10-20T13:10:00Z"
+}
+```
+
+| Campo | Regra (400 quando inválido) |
+| --- | --- |
+| `name` | obrigatório no POST; se enviado no PUT não pode ser vazio (`nome é obrigatório`) |
+| `person_type` | `""` \| `pf` \| `pj` (aceita também `F`/`J`/`física`/`jurídica`) (`tipo de pessoa inválido`) |
+| `cpf` | igual a `customer_cpf` dos veículos (`CPF inválido`) |
+| `cnpj` | `""` ou 14 dígitos com dígitos verificadores; máscara `.`, `/`, `-` (`CNPJ inválido`) |
+| `phone` / `mobile` | DDD + número (10–11 dígitos), mesmas regras do `customer_whatsapp` (`telefone inválido` / `celular inválido`) |
+| `email` / `email_secondary` | `""` ou `algo@dominio.tld`; gravado em minúsculas (`e-mail inválido`) |
+| `cep` | 8 dígitos (`CEP inválido`) |
+| `uf` | `""` ou 2 letras; gravado em maiúsculas (`UF inválida`) |
+| `birth_date` | `""`/`null` ou `AAAA-MM-DD`, `DD/MM/AAAA`; não pode ser futura nem antes de 1900 (`data de nascimento inválida`). Resposta sempre `AAAA-MM-DD` ou `null` |
+| `rg`, `street`, `number`, `complement`, `district`, `city`, `notes` | texto livre (trim) |
+
+`last_service_at`: o mais recente entre a abertura (`opened_at`) das OS importadas do cliente e a criação dos nossos atendimentos (`/api/lists`) vinculados a ele; `null` se nunca houve.
+
+### GET /api/customers
+Query: `search`, `page`, `limit` (mesmos limites de `/api/lists`: `page` mínimo 1; `limit` 1–100, fora disso 20).
+
+`search` não diferencia maiúsculas e casa com: nome, e-mails, **placa** de qualquer veículo do cliente (ignora `-` e espaços) e — quando o termo não tem letras — CPF, CNPJ, telefone e celular comparando só os dígitos (`123.456.789-09`, `(11) 98765` funcionam).
+
+Ordem: **atualizados mais recentemente primeiro** (`updated_at` desc, desempate `id` desc). Importações que não mudam nada no cadastro não alteram `updated_at`.
+
+```json
+{
+  "customers": [
+    {
+      "id": 12, "name": "Maria Souza", "cpf": "12345678909", "mobile": "11987654321", "...": "demais campos do cliente",
+      "vehicles": [
+        { "id": 30, "plate": "ABC1D23", "manufacturer": "VW", "model": "Gol 1.6", "year_model": 2015, "last_mileage": 87500 }
+      ],
+      "last_service_at": "2026-10-20T13:10:00Z"
+    }
+  ],
+  "page": 1, "limit": 20, "total": 1, "total_pages": 1
+}
+```
+
+Na lista, `vehicles` é compacto (`id`, `plate`, `manufacturer`, `model`, `year_model`, `last_mileage`); sempre array (pode ser `[]`).
+
+### GET /api/customers/:id
+Cliente completo + `vehicles` com todos os campos do [veículo do cliente](#veículos-do-cliente) + `last_service_at`.
+
+### POST /api/customers
+Cria cliente **local** (`source = local`). Body com os campos do objeto (só `name` obrigatório). 201 com o cliente (`vehicles: []`).
+
+- 409 `{ "error": "CPF já cadastrado em outro cliente", "existing_id": 12 }` quando o CPF já existe na oficina.
+
+### PUT /api/customers/:id
+Edita cliente local ou importado. **Chave ausente ou `null` mantém** o valor; chave presente grava (`""` limpa). Mesmas validações e mesmo 409 de CPF (trocar para o CPF de outro cliente). 200 com o cliente completo.
+
+Cliente importado (`source = onmotor`) pode ser editado, mas a **próxima sincronização sobrescreve** os campos que vierem do OnMotor.
+
 ## Auditoria (owner/manager)
 
 ### GET /api/audit
@@ -383,7 +459,8 @@ IDs GORM antigos (`ID`, `CreatedAt`) podem aparecer se o model ainda usar tags m
 
 ## Erros comuns
 
-- 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `quilometragem inválida`, ...)
+- 400 dados inválidos (`título é obrigatório`, `CPF inválido`, `CEP inválido`, `WhatsApp inválido`, `quilometragem inválida`, `nome é obrigatório`, `CNPJ inválido`, ...)
+- 409 cadastro duplicado na oficina: `{ "error": "...", "existing_id": 12 }` (CPF de cliente)
 - 401 token ausente, inválido ou na blacklist
 - 403 transição de status ou mutação de pátio negada ao mecânico; exclusão de informação importante de outro autor pelo mecânico
 - 404 veículo/item não encontrado (também usado para esconder recurso de outro workspace)

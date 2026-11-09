@@ -438,3 +438,55 @@ Authorization: Bearer {{loginOwner.response.body.token}}
 ### Auditoria
 GET {{baseUrl}}/api/audit?page=1&limit=20
 Authorization: Bearer {{loginOwner.response.body.token}}
+
+### ---- Clientes (so dono/gerente; refaca o login se tiver feito logout acima) ----
+
+### Criar cliente local
+# @name createCustomer
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Maria Souza",
+  "person_type": "pf",
+  "cpf": "123.456.789-09",
+  "mobile": "+55 (11) 98765-4321",
+  "email": "maria@exemplo.com",
+  "cep": "01310-100",
+  "city": "Sao Paulo",
+  "uf": "SP",
+  "birth_date": "03/05/1980"
+}
+
+### CPF duplicado (409 com existing_id)
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Outra Maria",
+  "cpf": "12345678909"
+}
+
+### Buscar clientes (nome, CPF, telefone, e-mail ou placa)
+GET {{baseUrl}}/api/customers?search=maria&page=1&limit=20
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Detalhe do cliente (com veiculos completos)
+GET {{baseUrl}}/api/customers/{{createCustomer.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+
+### Editar cliente (chave ausente mantem)
+PUT {{baseUrl}}/api/customers/{{createCustomer.response.body.id}}
+Authorization: Bearer {{loginOwner.response.body.token}}
+Content-Type: application/json
+
+{
+  "city": "Campinas",
+  "notes": "Prefere WhatsApp"
+}
+
+### Mecanico nao acessa clientes (403)
+GET {{baseUrl}}/api/customers
+Authorization: Bearer {{loginMechanic.response.body.token}}

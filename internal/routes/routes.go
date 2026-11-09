@@ -18,6 +18,7 @@ func SetupRoutes(
 	assignmentHandler *handlers.AssignmentHandler,
 	auditHandler *handlers.AuditHandler,
 	noteHandler *handlers.VehicleNoteHandler,
+	customerHandler *handlers.CustomerHandler,
 	secRepo *repository.SecurityRepository,
 ) {
 	router.Use(middleware.CORS())
@@ -87,5 +88,11 @@ func SetupRoutes(
 		protected.GET("/lists/:id/notes", noteHandler.List)
 		protected.POST("/lists/:id/notes", noteHandler.Add)
 		protected.DELETE("/lists/:id/notes/:noteId", noteHandler.Delete)
+
+		// Clientes (só dono/gerente; dados pessoais nunca vão para o mecânico)
+		protected.GET("/customers", customerHandler.List)
+		protected.POST("/customers", customerHandler.Create)
+		protected.GET("/customers/:id", customerHandler.Get)
+		protected.PUT("/customers/:id", customerHandler.Update)
 	}
 }
