@@ -491,7 +491,7 @@ Revoga (204). Idempotente; token de outra oficina/inexistente → 404. Token rev
 O OnMotor (sistema de gestão da oficina) é a fonte dos clientes, veículos e OS antigas. A sincronização é **de mão única**: um robô **lê** do OnMotor e envia para esta API; **nada é escrito no OnMotor**. Também dá para importar manualmente uma planilha exportada do OnMotor pelo painel (a web converte a planilha em JSON no navegador e envia o mesmo formato).
 
 ### POST /api/integrations/onmotor/import (robô)
-Autenticação: `Authorization: Bearer rmx_...` ([token de integração](#tokens-de-integração-só-owner)). **Não aceita JWT de usuário** (401) — e o token de integração não vale nas rotas de usuário (401). A oficina é a do token. Rate limit: 30 chamadas/min por IP (além do global de 60/min); em 429, aguarde e repita o lote (é idempotente).
+Autenticação: `Authorization: Bearer rmx_...` ([token de integração](#tokens-de-integração-só-owner)). **Não aceita JWT de usuário** (401) — e o token de integração não vale nas rotas de usuário (401). A oficina é a do token. Rate limit: 30 chamadas/min por IP (além do global de 600/min por IP); em 429, aguarde e repita o lote (é idempotente).
 
 Body (todas as listas opcionais; até **1000 registros por lista** por chamada, senão 413; corpo até 20 MB):
 
